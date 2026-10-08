@@ -23,6 +23,46 @@ async function initMap() {
     });
 }
 
+async function executeSearch(location) {
+    try {
+        const { Place } = await google.maps.importLibrary("places");
+
+        const request = {
+            locationRestriction: {
+                center: location,
+                radius: 2000
+            },
+            includedTypes: [
+                'tourist_attraction', 
+                'historical_landmark', 
+                'monument'],
+            maxResultCount: 10,
+            fields: [
+                'displayName', 
+                'formattedAddress', 
+                'types', 
+                'location']
+        };
+    
+        const { places } = await Place.searchNearby(request);
+
+        if (!places || places.length == 0) {
+            console.log("No landmarks found in the nearby area/radius.")
+            return;
+        }
+
+        places.forEach(place => {
+            console.log(`Landmark Name: ${place.displayName}`);
+            console.log(`Types/Categories:`, place.types);
+            console.log(`Address: ${place.formattedAddress}`);
+            console.log(`-----------------------------------`);
+        });
+
+    } catch(error) {
+        console.error("Error fetching nearby landmarks", error)
+    }
+}
+
 function findLocation() {
     // Check if geolocation API is allowed by the browser 
     if (!navigator.geolocation) {
@@ -73,6 +113,8 @@ async function locationSuccess(position) {
         position: userLocation,
         title: "Current Location"
     });       
+
+    executeSearch(userLocation);
 }
 
 function locationError(error) {
