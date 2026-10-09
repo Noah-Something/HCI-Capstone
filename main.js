@@ -1,6 +1,7 @@
 const locationButton = document.getElementById('getLocationButton');
 const statusText = document.getElementById('status');
 const coordText = document.getElementById('coordinates');
+const resultsContainer = document.getElementById("landmarkResults");
 
 // Create map, marker
 let map;
@@ -35,19 +36,40 @@ async function executeSearch(location) {
             includedTypes: [
                 'tourist_attraction', 
                 'historical_landmark', 
-                'monument'],
+                'monument',
+                'amusement_park', 
+                'aquarium', 
+                'botanical_garden', 
+                'city_park', 
+                'cultural_center', 
+                'historical_landmark', 
+                'national_park', 
+                'observation_deck', 
+                'park', 
+                'tourist_attraction', 
+                'visitor_center', 
+                'zoo'],
             maxResultCount: 10,
             fields: [
                 'displayName', 
                 'formattedAddress', 
                 'types', 
-                'location']
+                'location',
+                'photos']
         };
     
         const { places } = await Place.searchNearby(request);
 
+        // Clear previous container results
+        resultsContainer.innerHTML = "";
+
         if (!places || places.length == 0) {
             console.log("No landmarks found in the nearby area/radius.")
+            resultsContainer.innerHTML = `
+                <p class="no-results">
+                    No landmarks found nearby.
+                </p>
+            `;
             return;
         }
 
@@ -55,7 +77,61 @@ async function executeSearch(location) {
             console.log(`Landmark Name: ${place.displayName}`);
             console.log(`Types/Categories:`, place.types);
             console.log(`Address: ${place.formattedAddress}`);
+            console.log(place.displayName, place.photos?.length, place.photos?.[0]?.getURI({ maxWidth: 400 }));
+            console.log(place.displayName, place.id, place.googleMapsURI, place.photos?.length);
             console.log(`-----------------------------------`);
+
+            const card = document.createElement("div");
+            card.className = "landmark-card";
+
+            const image = document.createElement("img");
+            image.className = "landmark-image";
+
+            if (place.photos && place.photos.length > 0) {
+                image.src = place.photos[0].getURI({
+                    maxWidth: 400,
+                    maxHeight: 250
+                });
+            } else {
+                image.src = "https://via.placeholder.com/400x250?text=No+Image";
+            }
+
+            const content = document.createElement("div");
+            content.className = "landmark-content";
+
+            const title = document.createElement("h3");
+            title.textContent = place.displayName || "Unknown Landmark";
+
+            const address = document.createElement("p");
+            address.textContent = place.formattedAddress || "Address unavailable";
+
+            const button = document.createElement("button");
+            button.textContent = "View on Map";
+
+            button.addEventListener("click", () => {
+                map.setCenter(place.location);
+                map.setZoom(17);
+
+                if (locationMarker) {
+                    locationMarker.map = null;
+                }
+                
+                locationMarker = new 
+                google.maps.marker.AdvancedMarkerElement({
+                    map: map,
+                    position: place.location,
+                    title: place.displayName
+                });
+            });
+
+            content.appendChild(title);
+            content.appendChild(address);
+            content.appendChild(button);
+
+            card.appendChild(image);
+            card.appendChild(content);
+
+            resultsContainer.appendChild(card);
         });
 
     } catch(error) {

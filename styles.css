@@ -1,0 +1,59 @@
+#landmarkResults {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.landmark-card {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.landmark-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+}
+
+.landmark-image {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    display: block;
+}
+
+.landmark-content {
+    padding: 14px;
+}
+
+.landmark-content h3 {
+    margin: 0 0 8px;
+    font-size: 18px;
+}
+
+.landmark-content p {
+    margin: 0 0 12px;
+    color: #666;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.landmark-content button {
+    border: none;
+    background: #4285f4;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.landmark-content button:hover {
+    background: #3367d6;
+}
+
+.no-results {
+    color: #666;
+}
