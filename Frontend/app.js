@@ -1,11 +1,8 @@
 // ===== HokieConnect – home page code =====
-
-// 1. If the user is not logged in, send them back to the login page
 if (!sessionStorage.getItem('authToken')) {
   window.location.href = 'index.html';
 }
-
-// 2. Sample events (later these will come from the backend: fetch('/api/events'))
+// samples
 const events = [
   { title: 'Saturday Morning 5K on the Mall', category: 'Running', when: 'Sat 8:00 AM', where: 'National Mall', going: 12 },
   { title: 'Hokies Game-Day Watch Party',      category: 'Social',  when: 'Sat 3:30 PM', where: 'Clarendon',     going: 24 },
@@ -43,5 +40,5 @@ for (const button of filterButtons) {
   });
 }
 
-// 6. Show all events when the page first loads
+
 showEvents('All');
