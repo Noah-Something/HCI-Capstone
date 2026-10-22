@@ -55,7 +55,7 @@
 
                 if (response.ok) {
                     // Login successful
-                    sessionStorage.setItem('token', data.token); 
+                    sessionStorage.setItem('authToken', data.token); 
                     window.location.href = 'home.html';
                    
                 } else {
