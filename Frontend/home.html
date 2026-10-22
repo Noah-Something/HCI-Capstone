@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HokieConnect - Home</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=DM+Sans:wght@400;700&display=swap">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="home.html" class="logo">HokieConnect</a>
+    <div class="nav-links">
+      <a href="home.html" class="active">Discover</a>
+      <a href="hokies.html">Hokies</a>
+      <a href="groups.html">Groups</a>
+      <a href="messages.html">Messages</a>
+      <a href="profile.html">Profile</a>
+    </div>
+  </nav>
+
+  <div class="page">
+    <p class="gray">Welcome back!</p>
+    <h1>Discover</h1>
+
+    <div class="home-layout">
+
+      <!-- LEFT: events -->
+      <div>
+        <div class="filters">
+          <button class="filter active" data-category="All">All</button>
+          <button class="filter" data-category="Running">Running</button>
+          <button class="filter" data-category="Yoga">Yoga</button>
+          <button class="filter" data-category="Social">Social</button>
+        </div>
+
+        <h2>This week near you</h2>
+        <!-- app.js puts the event cards in here -->
+        <div id="eventList" class="event-grid"></div>
+      </div>
+
+      <!-- RIGHT: side panel -->
+      <div>
+        <a href="hokies.html" class="card" style="display:block;background:var(--maroon);color:white;margin-bottom:14px">
+          <p style="margin:0 0 6px">YOUR FIRST CONNECTION</p>
+          <h2>5 Class of '26 Hokies live near you</h2>
+          <p style="margin:0">Say hi →</p>
+        </a>
+        <div class="card">
+          <b>Map</b>
+          <p class="gray">Google Map goes here later (from main.js).</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
