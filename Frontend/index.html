@@ -18,7 +18,7 @@
 
         <div class="login-right">
             <h2> Sign in</h2>
-            <form id="login-form">
+            <form id="loginForm">
                 <label for="username"> Username</label>
                 <input id="username" class="input" type="text" placeholder="testUser" required>
 
@@ -46,7 +46,7 @@
             loginStatus.textContent = 'Signing in ...'
 
             try {
-                const response = await fetch('http://localhost:3000/login', {
+                const response = await fetch('http://localhost:3000/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json'},
                     body: JSON.stringify({ username, password }),
