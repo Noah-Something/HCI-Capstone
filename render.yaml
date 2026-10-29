@@ -1,14 +1,18 @@
 services:
   - type: web
-    name: my-web-app
-    runtime: node # change to python, docker, go, etc.
+    name: HokieConnect
+    runtime: node
     plan: free
-    buildCommand: npm run build
-    startCommand: npm start
+    buildCommand: npm install
+    startCommand: node server.js
     envVars:
-      - key: DATABASE_URL
+      - key: USER_DATABASE_URL
         fromDatabase:
-          name: my-database
+          name: user-database        # must match a name under databases:
+          property: connectionString
+      - key: EVENTS_DATABASE_URL
+        fromDatabase:
+          name: events-database
           property: connectionString
 
 databases:
