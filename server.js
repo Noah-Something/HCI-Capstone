@@ -4,6 +4,7 @@ const bcrypt = require('bcrypt'); // Encrypt Usernames and Passwords using round
 const crypto = require('crypto'); // Create token upon logging in
 const cors = require('cors');
 const { Pool } = require('pg'); // Postgres client for the HokieConnect database
+const path = require('path');
 
 const app = express();
 
@@ -74,6 +75,9 @@ const initDatabase = async () => {
 };
 
 app.use(express.json());
+
+// Serve the website (Frontend/index.html is the sign in page at "/")
+app.use(express.static(path.join(__dirname, 'Frontend')));
 
 app.use(cors({
     origin: 'http://127.0.0.1:5500',
