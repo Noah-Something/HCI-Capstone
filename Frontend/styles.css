@@ -156,3 +156,44 @@ textarea.input { font-family: inherit; resize: vertical; }
 .connection-score { background: white; color: var(--maroon); padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: bold; white-space: nowrap; }
 .connection-detail { margin: 6px 0 0; font-size: 14px; opacity: 0.9; }
 .connection-action { margin: 0; font-weight: bold; }
+
+/* Messages page */
+.messages-layout { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; margin-top: 12px; }
+.conversation-panel { padding: 8px; max-height: 70vh; overflow-y: auto; }
+.conversation { display: block; width: 100%; text-align: left; background: none; border: none; border-radius: 12px; padding: 10px; cursor: pointer; font: inherit; color: var(--text); }
+.conversation:hover { background: var(--bg); }
+.conversation.active { background: var(--maroon-light); }
+.conversation-top, .conversation-bottom { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.conversation-time { font-size: 12px; white-space: nowrap; }
+.conversation-preview { color: var(--gray); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.conversation-preview.unread { color: var(--text); font-weight: bold; }
+.unread-badge { background: var(--maroon); color: white; border-radius: 999px; font-size: 12px; font-weight: bold; padding: 1px 8px; }
+.thread-panel { display: flex; flex-direction: column; min-height: 60vh; }
+.thread-empty { margin: auto; text-align: center; padding: 40px 20px; }
+#thread { display: flex; flex-direction: column; flex: 1; }
+#thread[hidden] { display: none; }
+.thread-header { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.back-button { display: none; padding: 6px 12px; }
+.message-list { flex: 1; overflow-y: auto; max-height: 55vh; padding: 12px 0; display: flex; flex-direction: column; gap: 10px; }
+.thread-start { text-align: center; margin: auto; }
+.message { display: flex; flex-direction: column; max-width: 75%; }
+.message.mine { align-self: flex-end; align-items: flex-end; }
+.message.theirs { align-self: flex-start; align-items: flex-start; }
+.bubble { padding: 10px 14px; border-radius: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.mine .bubble { background: var(--maroon); color: white; border-bottom-right-radius: 4px; }
+.theirs .bubble { background: var(--bg); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.message-time { color: var(--gray); font-size: 12px; margin-top: 3px; }
+.message-form { display: flex; gap: 8px; align-items: flex-end; border-top: 1px solid var(--border); padding-top: 12px; }
+.message-form .input { margin: 0; font-family: inherit; resize: none; }
+.message-form[hidden] { display: none; }
+
+/* Phones: show the list or the open conversation, not both */
+@media (max-width: 800px) {
+  .messages-layout { grid-template-columns: 1fr; }
+  .messages-layout.showing-thread .conversation-panel { display: none; }
+  .messages-layout:not(.showing-thread) .thread-panel { display: none; }
+  .back-button { display: inline-block; }
+}
+
+/* Message button on Hokies cards */
+.hokie-actions { margin-top: 12px; }

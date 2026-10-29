@@ -116,6 +116,9 @@
           ${hokie.bio ? `<p>${escapeHtml(hokie.bio)}</p>` : ''}
           ${hokie.interests.length ? `<p class="chip-label">Interests</p><div class="chips">${makeChips(hokie.interests, hokie.sharedInterests)}</div>` : ''}
           ${hokie.wellnessPreferences.length ? `<p class="chip-label">Wellness</p><div class="chips">${makeChips(hokie.wellnessPreferences, hokie.sharedWellness)}</div>` : ''}
+          <div class="hokie-actions">
+            <a href="messages.html?user=${encodeURIComponent(hokie.username)}" class="btn btn-maroon">Message</a>
+          </div>
           <p class="score-breakdown">${breakdown}</p>
         </div>`;
     };

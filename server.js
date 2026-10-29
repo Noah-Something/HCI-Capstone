@@ -109,7 +109,20 @@ const initDatabase = async () => {
         ALTER TABLE profiles ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
         ALTER TABLE profiles ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
 
+        -- Direct messages between two users, read_at stays NULL until the recipient opens the conversation
+        CREATE TABLE IF NOT EXISTS messages (
+            id SERIAL PRIMARY KEY,
+            sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            body TEXT NOT NULL CHECK (char_length(body) BETWEEN 1 AND 1000),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            read_at TIMESTAMPTZ,
+            CHECK (sender_id <> recipient_id)
+        );
+
         -- Speed up lookups like "all groups/events for this user"
+        CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id, recipient_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(recipient_id, sender_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
         CREATE INDEX IF NOT EXISTS idx_user_interests_interest ON user_interests(interest);
         CREATE INDEX IF NOT EXISTS idx_user_wellness_preference ON user_wellness_preferences(preference);
@@ -664,6 +677,149 @@ app.get('/api/hokies', requireAuth, async (req, res) => {
                 hasGradYear: viewer.gradYear !== null
             },
             hokies: hokies.slice(0, 50)
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// ===== Messages =====
+const MAX_MESSAGE_LENGTH = 1000;
+
+// Messages returned per conversation, the newest ones
+const MESSAGE_HISTORY_LIMIT = 200;
+
+// Look up the other person in a conversation by username, returns null if not found
+const findMessagePartner = async (username) => {
+    const result = await pool.query(
+        `SELECT users.id, users.username, profiles.display_name FROM users
+         LEFT JOIN profiles ON profiles.user_id = users.id
+         WHERE users.username = $1`,
+        [username]
+    );
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0];
+    return { id: row.id, username: row.username, displayName: row.display_name || row.username };
+};
+
+// List the logged in user's conversations, most recent first, with the last message and unread count
+app.get('/api/conversations', requireAuth, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT * FROM messages WHERE sender_id = $1 OR recipient_id = $1 ORDER BY created_at DESC, id DESC`,
+            [req.userId]
+        );
+
+        // Messages are newest first, so the first one seen for each person is the latest
+        const conversations = new Map();
+        for (const message of result.rows) {
+            const partnerId = message.sender_id === req.userId ? message.recipient_id : message.sender_id;
+            if (!conversations.has(partnerId)) {
+                conversations.set(partnerId, {
+                    partnerId,
+                    lastMessage: message.body,
+                    lastMessageFromMe: message.sender_id === req.userId,
+                    lastMessageAt: message.created_at,
+                    unreadCount: 0
+                });
+            }
+            if (message.recipient_id === req.userId && message.read_at === null) {
+                conversations.get(partnerId).unreadCount += 1;
+            }
+        }
+
+        const partnerIds = [...conversations.keys()];
+        const names = new Map();
+        if (partnerIds.length > 0) {
+            const placeholders = partnerIds.map((_, index) => `$${index + 1}`).join(', ');
+            const partnerResult = await pool.query(
+                `SELECT users.id, users.username, profiles.display_name FROM users
+                 LEFT JOIN profiles ON profiles.user_id = users.id
+                 WHERE users.id IN (${placeholders})`,
+                partnerIds
+            );
+            for (const row of partnerResult.rows) names.set(row.id, row);
+        }
+
+        const list = [...conversations.values()].map(({partnerId, ...conversation}) => ({
+            username: names.get(partnerId).username,
+            displayName: names.get(partnerId).display_name || names.get(partnerId).username,
+            ...conversation
+        }));
+        return res.status(200).json({
+            conversations: list,
+            totalUnread: list.reduce((sum, c) => sum + c.unreadCount, 0)
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// Get the conversation with another user, oldest first, and mark their messages to me as read
+app.get('/api/messages/:username', requireAuth, async (req, res) => {
+    try {
+        const partner = await findMessagePartner(req.params.username);
+        if (!partner || partner.id === req.userId) {
+            return res.status(404).json({message: 'User Not Found'});
+        }
+
+        const result = await pool.query(
+            `SELECT id, sender_id, body, created_at, read_at FROM messages
+             WHERE (sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1)
+             ORDER BY created_at DESC, id DESC
+             LIMIT $3`,
+            [req.userId, partner.id, MESSAGE_HISTORY_LIMIT]
+        );
+        await pool.query(
+            'UPDATE messages SET read_at = NOW() WHERE sender_id = $1 AND recipient_id = $2 AND read_at IS NULL',
+            [partner.id, req.userId]
+        );
+
+        return res.status(200).json({
+            partner: { username: partner.username, displayName: partner.displayName },
+            messages: result.rows.reverse().map((row) => ({
+                id: row.id,
+                fromMe: row.sender_id === req.userId,
+                body: row.body,
+                createdAt: row.created_at,
+                read: row.read_at !== null
+            }))
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// Send a message to another user
+app.post('/api/messages/:username', requireAuth, async (req, res) => {
+    const body = typeof req.body.body === 'string' ? req.body.body.trim() : '';
+    if (!body) {
+        return res.status(400).json({message: 'Message cannot be empty'});
+    }
+    if (body.length > MAX_MESSAGE_LENGTH) {
+        return res.status(400).json({message: `Message must be ${MAX_MESSAGE_LENGTH} characters or fewer`});
+    }
+
+    try {
+        const partner = await findMessagePartner(req.params.username);
+        if (!partner || partner.id === req.userId) {
+            return res.status(404).json({message: 'User Not Found'});
+        }
+
+        const result = await pool.query(
+            `INSERT INTO messages (sender_id, recipient_id, body) VALUES ($1, $2, $3)
+             RETURNING id, body, created_at`,
+            [req.userId, partner.id, body]
+        );
+        const message = result.rows[0];
+        return res.status(201).json({
+            message: { id: message.id, fromMe: true, body: message.body, createdAt: message.created_at, read: false }
         });
     } catch (error) {
         return res.status(500).json({

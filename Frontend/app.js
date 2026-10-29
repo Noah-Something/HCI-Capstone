@@ -110,7 +110,9 @@ async function showFirstConnection() {
         <p class="connection-detail">${details}</p>
         ${shared.length ? `<p class="connection-detail">You both like ${escapeHtml(shared.slice(0, 3).join(', '))}</p>` : ''}
       </div>`;
-    action.textContent = 'Say hi →';
+    // Opens a conversation with the top match
+    card.href = `messages.html?user=${encodeURIComponent(top.username)}`;
+    action.textContent = `Say hi to ${top.displayName} →`;
   } catch (error) {
     headline.textContent = 'Meet Hokies near you';
     match.innerHTML = '';

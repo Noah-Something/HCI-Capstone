@@ -21,13 +21,246 @@
   </nav>
 
   <div class="page">
-    <div class="card coming-soon">
-      <span class="tag">Coming soon</span>
-      <h1 style="margin-top:16px">Messages</h1>
-      <p class="gray">Message other Hokies and chat with your groups.</p>
-      <a href="home.html" class="btn btn-maroon">Back to Discover</a>
+    <h1>Messages</h1>
+
+    <!-- "showing-thread" is added on phones when a conversation is open, so only one side shows at a time -->
+    <div id="messagesLayout" class="messages-layout">
+
+      <!-- LEFT: conversation list -->
+      <div class="card conversation-panel">
+        <div id="conversationList"></div>
+      </div>
+
+      <!-- RIGHT: open conversation -->
+      <div class="card thread-panel">
+        <div id="threadEmpty" class="thread-empty">
+          <p class="gray">Pick a conversation, or find someone to message on the <a href="hokies.html"><b>Hokies</b></a> page.</p>
+        </div>
+
+        <div id="thread" hidden>
+          <div class="thread-header">
+            <button type="button" id="backButton" class="btn back-button">←</button>
+            <div>
+              <h2 id="threadName" style="margin:0"></h2>
+              <p id="threadUsername" class="gray" style="margin:2px 0 0"></p>
+            </div>
+          </div>
+
+          <div id="messageList" class="message-list"></div>
+
+          <form id="messageForm" class="message-form">
+            <textarea id="messageInput" class="input" rows="2" maxlength="1000"
+                      placeholder="Write a message ... (Enter to send, Shift+Enter for a new line)" required></textarea>
+            <button type="submit" class="btn btn-maroon">Send</button>
+          </form>
+          <p id="messageStatus"></p>
+        </div>
+      </div>
+
     </div>
   </div>
+
+  <script>
+    const token = sessionStorage.getItem('authToken');
+    if (!token) {
+      window.location.href = 'index.html';
+    }
+
+    // Check for new messages this often while the page is open
+    const REFRESH_MS = 5000;
+
+    const conversationList = document.getElementById('conversationList');
+    const messageList = document.getElementById('messageList');
+    const messageInput = document.getElementById('messageInput');
+    const messageStatus = document.getElementById('messageStatus');
+    let openUsername = new URLSearchParams(window.location.search).get('user');
+    let lastThreadKey = '';
+
+    // Messages and names are typed by users, so escape them before putting them in the page
+    const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[char]);
+
+    // Sends the login token with every request, goes back to sign in if the session is no longer valid
+    const apiRequest = async (url, options = {}) => {
+      const response = await fetch(url, {
+        ...options,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+      });
+      if (response.status === 401) {
+        sessionStorage.removeItem('authToken');
+        window.location.href = 'index.html';
+      }
+      return response;
+    };
+
+    // Today shows the time, this week shows the day, older shows the date
+    const formatTime = (timestamp) => {
+      const date = new Date(timestamp);
+      const now = new Date();
+      if (date.toDateString() === now.toDateString()) {
+        return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      }
+      if (now - date < 6 * 24 * 60 * 60 * 1000) {
+        return date.toLocaleDateString([], { weekday: 'short' });
+      }
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    };
+
+    // ===== Conversation list =====
+    const loadConversations = async () => {
+      try {
+        const response = await apiRequest('/api/conversations');
+        if (!response.ok) throw new Error('Load failed');
+        const data = await response.json();
+
+        if (data.conversations.length === 0) {
+          conversationList.innerHTML = '<p class="gray">No messages yet.</p>';
+          return;
+        }
+        conversationList.innerHTML = data.conversations.map((c) => `
+          <button type="button" class="conversation${c.username === openUsername ? ' active' : ''}"
+                  data-username="${escapeHtml(c.username)}">
+            <div class="conversation-top">
+              <b>${escapeHtml(c.displayName)}</b>
+              <span class="gray conversation-time">${formatTime(c.lastMessageAt)}</span>
+            </div>
+            <div class="conversation-bottom">
+              <span class="conversation-preview${c.unreadCount ? ' unread' : ''}">
+                ${c.lastMessageFromMe ? 'You: ' : ''}${escapeHtml(c.lastMessage)}
+              </span>
+              ${c.unreadCount ? `<span class="unread-badge">${c.unreadCount}</span>` : ''}
+            </div>
+          </button>`).join('');
+      } catch (error) {
+        conversationList.innerHTML = '<p class="gray">Could not load conversations.</p>';
+      }
+    };
+
+    conversationList.addEventListener('click', (event) => {
+      const button = event.target.closest('.conversation');
+      if (button) openConversation(button.dataset.username);
+    });
+
+    // ===== Open conversation =====
+    const loadThread = async () => {
+      if (!openUsername) return;
+      try {
+        const response = await apiRequest(`/api/messages/${encodeURIComponent(openUsername)}`);
+        if (response.status === 404) {
+          document.getElementById('threadName').textContent = 'User not found';
+          document.getElementById('threadUsername').textContent = '';
+          document.getElementById('messageForm').hidden = true;
+          messageList.innerHTML = '';
+          return;
+        }
+        if (!response.ok) throw new Error('Load failed');
+        const data = await response.json();
+
+        document.getElementById('threadName').textContent = data.partner.displayName;
+        document.getElementById('threadUsername').textContent = `@${data.partner.username}`;
+        document.getElementById('messageForm').hidden = false;
+
+        // Only redraw when something changed, so the page does not jump while reading
+        const threadKey = data.messages.map((m) => `${m.id}:${m.read}`).join(',');
+        if (threadKey === lastThreadKey) return;
+        lastThreadKey = threadKey;
+
+        const wasAtBottom = messageList.scrollHeight - messageList.scrollTop - messageList.clientHeight < 40;
+        if (data.messages.length === 0) {
+          messageList.innerHTML = `<p class="gray thread-start">Say hi to ${escapeHtml(data.partner.displayName)}!</p>`;
+        } else {
+          // "Seen" is only shown under my most recent message
+          const lastMine = [...data.messages].reverse().find((m) => m.fromMe);
+          messageList.innerHTML = data.messages.map((m) => `
+            <div class="message ${m.fromMe ? 'mine' : 'theirs'}">
+              <div class="bubble">${escapeHtml(m.body)}</div>
+              <span class="message-time">${formatTime(m.createdAt)}${m === lastMine && m.read ? ' · Seen' : ''}</span>
+            </div>`).join('');
+        }
+        if (wasAtBottom || !messageList.dataset.loaded) {
+          messageList.scrollTop = messageList.scrollHeight;
+          messageList.dataset.loaded = 'true';
+        }
+      } catch (error) {
+        messageStatus.textContent = 'Could not load messages. Is server.js running?';
+        messageStatus.style.color = 'red';
+      }
+    };
+
+    const openConversation = (username) => {
+      openUsername = username;
+      lastThreadKey = '';
+      delete messageList.dataset.loaded;
+      messageList.innerHTML = '';
+      messageStatus.textContent = '';
+      history.replaceState(null, '', `messages.html?user=${encodeURIComponent(username)}`);
+
+      document.getElementById('threadEmpty').hidden = true;
+      document.getElementById('thread').hidden = false;
+      document.getElementById('messagesLayout').classList.add('showing-thread');
+      loadThread().then(loadConversations);
+      messageInput.focus();
+    };
+
+    document.getElementById('backButton').addEventListener('click', () => {
+      openUsername = null;
+      history.replaceState(null, '', 'messages.html');
+      document.getElementById('thread').hidden = true;
+      document.getElementById('threadEmpty').hidden = false;
+      document.getElementById('messagesLayout').classList.remove('showing-thread');
+      loadConversations();
+    });
+
+    // ===== Sending =====
+    document.getElementById('messageForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const body = messageInput.value.trim();
+      if (!body) return;
+
+      messageStatus.textContent = '';
+      try {
+        const response = await apiRequest(`/api/messages/${encodeURIComponent(openUsername)}`, {
+          method: 'POST',
+          body: JSON.stringify({ body })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          messageStatus.textContent = data.message || 'Could not send message.';
+          messageStatus.style.color = 'red';
+          return;
+        }
+        messageInput.value = '';
+        // Always jump to the new message
+        delete messageList.dataset.loaded;
+        await loadThread();
+        loadConversations();
+      } catch (error) {
+        messageStatus.textContent = 'Could not reach the server. Is server.js running?';
+        messageStatus.style.color = 'red';
+      }
+    });
+
+    messageInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        document.getElementById('messageForm').requestSubmit();
+      }
+    });
+
+    // ===== Start =====
+    if (openUsername) {
+      openConversation(openUsername);
+    } else {
+      loadConversations();
+    }
+
+    setInterval(() => {
+      if (document.hidden) return;
+      loadConversations();
+      loadThread();
+    }, REFRESH_MS);
+  </script>
 
 </body>
 </html>
