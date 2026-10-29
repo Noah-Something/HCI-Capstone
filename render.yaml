@@ -14,5 +14,5 @@ services:
 databases:
   - name: hokieconnect-db
     plan: basic-256mb
-    databaseName: user_db
+    databaseName: hokieconnect_db
     postgresMajorVersion: "16"
