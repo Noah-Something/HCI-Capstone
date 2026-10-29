@@ -20,6 +20,24 @@ function makeEventCard(event) {
     </a>`;
 }
 
+function showRecommendations() {
+  const recommendedEvents = document.getElementById('recommendedEvents');
+  const recommendationPrompt = document.getElementById('recommendationPrompt');
+  let interests = [];
+
+  try {
+    const profile = JSON.parse(localStorage.getItem('hokieConnectProfile') || '{}');
+    interests = Array.isArray(profile.interests) ? profile.interests : [];
+  } catch {
+    interests = [];
+  }
+
+  const interestSet = new Set(interests.map((interest) => String(interest).toLowerCase()));
+  const matches = events.filter((event) => interestSet.has(event.category.toLowerCase()));
+  recommendedEvents.innerHTML = matches.map(makeEventCard).join('');
+  recommendationPrompt.hidden = matches.length > 0;
+}
+
 function showEvents(category) {
   const list = document.getElementById('eventList');
   let html = '';
@@ -42,3 +60,4 @@ for (const button of filterButtons) {
 
 
 showEvents('All');
+showRecommendations();

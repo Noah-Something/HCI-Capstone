@@ -20,16 +20,126 @@
     </div>
   </nav>
 
-  <div class="page">
-    <div class="card coming-soon">
-      <span class="tag">Coming soon</span>
-      <h1 style="margin-top:16px">Your profile</h1>
-      <p class="gray">Edit your profile and choose who can see each part of it.</p>
-      <a href="home.html" class="btn btn-maroon">Back to Discover</a>
-      <br><br>
-      <a href="index.html" class="btn" onclick="sessionStorage.removeItem('authToken')">Log out</a>
-    </div>
-  </div>
+  <main class="page profile-page">
+    <header class="profile-heading">
+      <div>
+        <p class="profile-kicker">HOKIECONNECT / PROFILE</p>
+        <h1>Your profile</h1>
+        <p class="gray">A little about you goes a long way.</p>
+      </div>
+      <a href="home.html" class="btn profile-back">Discover</a>
+    </header>
 
+    <div class="profile-layout">
+      <aside class="card profile-preview" aria-label="Profile preview">
+        <div class="profile-avatar">
+          <span id="profileInitials" aria-hidden="true">HC</span>
+          <img id="profilePhotoPreview" alt="" draggable="false" hidden>
+          <button type="button" class="profile-photo-edit" id="editProfilePhoto" aria-label="Add profile photo" title="Add profile photo">
+            <span aria-hidden="true">&#9998;</span>
+          </button>
+          <input class="profile-photo-input" id="profilePhoto" name="profilePhotoFile" type="file" accept="image/*" aria-label="Choose profile photo">
+        </div>
+        <p class="profile-preview-label">PROFILE PREVIEW</p>
+        <h2 id="previewName">Your name</h2>
+        <p class="profile-preview-bio" id="previewBio">Your bio will appear here.</p>
+        <dl class="profile-facts">
+          <div>
+            <dt>Major</dt>
+            <dd id="previewMajor">Not added yet</dd>
+          </div>
+          <div>
+            <dt>Graduation</dt>
+            <dd id="previewGraduation">Not added yet</dd>
+          </div>
+          <div>
+            <dt>Workplace</dt>
+            <dd id="previewWorkplace">Not added yet</dd>
+          </div>
+          <div>
+            <dt>Interests</dt>
+            <dd id="previewInterests">Not added yet</dd>
+          </div>
+        </dl>
+      </aside>
+
+      <form class="profile-form" id="profileForm">
+        <div class="profile-form-heading">
+          <h2>About you</h2>
+          <p class="gray">Share the details you want other Hokies to know.</p>
+        </div>
+
+        <div class="profile-fields">
+          <label class="profile-field" for="fullName">
+            Name
+            <input class="input" id="fullName" name="fullName" type="text" autocomplete="name" maxlength="80" placeholder="Your name">
+          </label>
+          <label class="profile-field" for="major">
+            Major
+            <input class="input" id="major" name="major" type="text" maxlength="100" placeholder="e.g. Computer Science">
+          </label>
+          <label class="profile-field" for="graduationDate">
+            Graduation date
+            <input class="input" id="graduationDate" name="graduationDate" type="date">
+          </label>
+          <label class="profile-field" for="workplace">
+            Workplace
+            <input class="input" id="workplace" name="workplace" type="text" autocomplete="organization" maxlength="100" placeholder="Company or organization">
+          </label>
+          <label class="profile-field profile-field-full" for="bio">
+            Bio
+            <textarea class="input profile-textarea" id="bio" name="bio" maxlength="280" rows="4" placeholder="What should people know about you?"></textarea>
+          </label>
+          <div class="profile-field profile-field-full">
+            <label for="interestSearch">Interests</label>
+            <div class="interest-search-row">
+              <input class="input" id="interestSearch" type="search" list="interestOptions" autocomplete="off" placeholder="Search interests" aria-describedby="interestHint">
+              <datalist id="interestOptions">
+                <option value="Arts & culture"></option>
+                <option value="Board games"></option>
+                <option value="Career networking"></option>
+                <option value="Coffee"></option>
+                <option value="Cooking"></option>
+                <option value="Cycling"></option>
+                <option value="Fitness"></option>
+                <option value="Food & dining"></option>
+                <option value="Gaming"></option>
+                <option value="Hiking"></option>
+                <option value="Live music"></option>
+                <option value="Outdoors"></option>
+                <option value="Running"></option>
+                <option value="Social"></option>
+                <option value="Sports"></option>
+                <option value="Study groups"></option>
+                <option value="Technology"></option>
+                <option value="Volunteering"></option>
+                <option value="Wellness"></option>
+                <option value="Yoga"></option>
+              </datalist>
+              <button type="button" class="btn" id="addInterest">Add</button>
+            </div>
+            <span class="profile-hint" id="interestHint">Search and select an option, then add it to your profile.</span>
+            <p class="interest-status" id="interestStatus" role="status" aria-live="polite"></p>
+            <p class="profile-hint interest-empty" id="interestEmpty">No interests added yet.</p>
+            <ul class="selected-interests" id="selectedInterests" aria-label="Selected interests"></ul>
+          </div>
+          <div class="profile-field profile-field-full">
+            <label for="profilePhoto">Profile photo</label>
+            <div class="profile-photo-controls">
+              <button type="button" class="btn profile-photo-remove" id="removeProfilePhoto" hidden>Remove photo</button>
+            </div>
+            <span class="profile-hint" id="profilePhotoHint">Use the edit button on the photo to upload an image up to 1.5 MB. Drag the photo to reposition it.</span>
+          </div>
+        </div>
+
+        <div class="profile-actions">
+          <p class="profile-save-status" id="saveStatus" role="status" aria-live="polite"></p>
+          <button type="submit" class="btn btn-maroon">Save profile</button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <script src="profile.js"></script>
 </body>
 </html>
