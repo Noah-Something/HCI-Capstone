@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HokieConnect - Event details</title>
+  <title>HokieConnect - Event</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=DM+Sans:wght@400;700&display=swap">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -21,13 +21,23 @@
   </nav>
 
   <div class="page">
-    <div class="card coming-soon">
-      <span class="tag">Coming soon</span>
-      <h1 style="margin-top:16px">Event details</h1>
-      <p class="gray">See event details, who's going, and RSVP.</p>
-      <a href="home.html" class="btn btn-maroon">Back to Discover</a>
+    <a href="home.html"><b> Back to Discover </b></a>
+
+    <div class="card event-detail">
+        <div class="event-top" id="eventCategory"></div>
+        <div class="event-info">
+            <h1 id="eventTitle"></h1>
+            <p class="gray" id="eventWhen"></p>
+            <p id="eventDescription"></p>
+            <p class="tip"><b>First time?</b> <span id="eventTip"></span></p>
+            <p class="going" id="eventGoing"></p>
+            <button id="rsvpButton" class="btn btn-maroon">I plan to go</button>
+        </div>
     </div>
   </div>
+
+  <script src="event.js"></script>
+  <script src="app.js"></script>
 
 </body>
 </html>
