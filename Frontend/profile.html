@@ -68,13 +68,13 @@
         <div id="interestChoices" class="filters"></div>
       </div>
 
-      <!-- Wellness goal: pick one -->
+      <!-- Wellness preferences: pick any number -->
       <div class="card profile-section">
         <div class="section-header">
-          <h2>Wellness goal</h2>
-          <select id="wellnessVisibility" class="visibility-select" aria-label="Who can see your wellness goal"></select>
+          <h2>Wellness preferences</h2>
+          <select id="wellnessVisibility" class="visibility-select" aria-label="Who can see your wellness preferences"></select>
         </div>
-        <p class="gray">What would you most like to focus on?</p>
+        <p class="gray">What would you like to focus on? Pick as many as you like.</p>
         <div id="wellnessChoices" class="filters"></div>
       </div>
 
@@ -112,22 +112,14 @@
     };
 
     // Creates a chip button, same style as the filters on the home page
-    const makeChip = (container, value, isSingleChoice) => {
+    // Clicking a chip selects it, clicking again deselects it
+    const makeChip = (container, value) => {
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'filter';
       chip.textContent = value;
       chip.dataset.value = value;
-      chip.addEventListener('click', () => {
-        if (isSingleChoice) {
-          // Clicking the selected goal again clears it
-          const wasActive = chip.classList.contains('active');
-          for (const other of container.children) other.classList.remove('active');
-          if (!wasActive) chip.classList.add('active');
-        } else {
-          chip.classList.toggle('active');
-        }
-      });
+      chip.addEventListener('click', () => chip.classList.toggle('active'));
       container.appendChild(chip);
     };
 
@@ -145,8 +137,8 @@
         const profile = await profileResponse.json();
 
         // Build the choices
-        for (const interest of options.interests) makeChip(document.getElementById('interestChoices'), interest, false);
-        for (const goal of options.wellnessGoals) makeChip(document.getElementById('wellnessChoices'), goal, true);
+        for (const interest of options.interests) makeChip(document.getElementById('interestChoices'), interest);
+        for (const preference of options.wellnessPreferences) makeChip(document.getElementById('wellnessChoices'), preference);
         for (const place of options.neighborhoods) {
           const option = document.createElement('option');
           option.value = place;
@@ -173,7 +165,7 @@
           if (profile.interests.includes(chip.dataset.value)) chip.classList.add('active');
         }
         for (const chip of document.querySelectorAll('#wellnessChoices .filter')) {
-          if (chip.dataset.value === profile.wellnessGoal) chip.classList.add('active');
+          if (profile.wellnessPreferences.includes(chip.dataset.value)) chip.classList.add('active');
         }
 
         // New accounts are sent here from the signup page
@@ -198,8 +190,8 @@
         gradYear: gradYear ? Number(gradYear) : null,
         neighborhood: document.getElementById('neighborhood').value.trim(),
         bio: document.getElementById('bio').value.trim(),
-        wellnessGoal: selectedChips('wellnessChoices')[0] || '',
         interests: selectedChips('interestChoices'),
+        wellnessPreferences: selectedChips('wellnessChoices'),
         visibility: {
           neighborhood: document.getElementById('neighborhoodVisibility').value,
           interests: document.getElementById('interestsVisibility').value,

@@ -82,7 +82,6 @@ const initDatabase = async () => {
             grad_year SMALLINT,
             neighborhood VARCHAR(100),
             bio TEXT,
-            wellness_goal VARCHAR(50),
             neighborhood_visibility VARCHAR(20) NOT NULL DEFAULT 'hokies' CHECK (neighborhood_visibility IN ('hokies', 'only_me')),
             interests_visibility VARCHAR(20) NOT NULL DEFAULT 'hokies' CHECK (interests_visibility IN ('hokies', 'only_me')),
             wellness_visibility VARCHAR(20) NOT NULL DEFAULT 'hokies' CHECK (wellness_visibility IN ('hokies', 'only_me')),
@@ -96,9 +95,20 @@ const initDatabase = async () => {
             PRIMARY KEY (user_id, interest)
         );
 
+        -- Link table: a user can pick many wellness preferences (allowed values are in PROFILE_OPTIONS)
+        CREATE TABLE IF NOT EXISTS user_wellness_preferences (
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            preference VARCHAR(50) NOT NULL,
+            PRIMARY KEY (user_id, preference)
+        );
+
+        -- Wellness used to be a single goal stored on the profile, now replaced by user_wellness_preferences
+        ALTER TABLE profiles DROP COLUMN IF EXISTS wellness_goal;
+
         -- Speed up lookups like "all groups/events for this user"
         CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
         CREATE INDEX IF NOT EXISTS idx_user_interests_interest ON user_interests(interest);
+        CREATE INDEX IF NOT EXISTS idx_user_wellness_preference ON user_wellness_preferences(preference);
         CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id);
         CREATE INDEX IF NOT EXISTS idx_event_attendees_user ON event_attendees(user_id);
         CREATE INDEX IF NOT EXISTS idx_events_starts_at ON events(starts_at);
@@ -159,9 +169,10 @@ const PROFILE_OPTIONS = {
         'Running', 'Yoga', 'Social', 'Hiking', 'Cycling', 'Gym & Fitness',
         'Game Days', 'Food & Drink', 'Volunteering', 'Arts & Music', 'Board Games'
     ],
-    wellnessGoals: [
-        'Stay active', 'Reduce stress', 'Build a routine',
-        'Meet new people', 'Sleep better', 'Eat healthier'
+    wellnessPreferences: [
+        'Mind-body movement', 'Cardio and Endurance', 'Mindfulness and Relaxation',
+        'Brain Stimulation', 'Digital Detox', 'Mindful Eating',
+        'Meeting new people', 'Group Connection'
     ],
     neighborhoods: [
         'Arlington', 'Clarendon', 'Alexandria', 'Capitol Hill', 'Navy Yard', 'Dupont Circle',
@@ -171,7 +182,7 @@ const PROFILE_OPTIONS = {
 };
 
 // Returns an error message if the profile is invalid, otherwise null
-const validateProfile = ({displayName, gradYear, neighborhood, bio, wellnessGoal, interests, visibility}) => {
+const validateProfile = ({displayName, gradYear, neighborhood, bio, wellnessPreferences, interests, visibility}) => {
     if (displayName && (typeof displayName !== 'string' || displayName.length > 100)) {
         return 'Display Name must be 100 characters or fewer';
     }
@@ -187,11 +198,12 @@ const validateProfile = ({displayName, gradYear, neighborhood, bio, wellnessGoal
     if (bio && (typeof bio !== 'string' || bio.length > 500)) {
         return 'Bio must be 500 characters or fewer';
     }
-    if (wellnessGoal && !PROFILE_OPTIONS.wellnessGoals.includes(wellnessGoal)) {
-        return 'Invalid Wellness Goal';
-    }
     if (!Array.isArray(interests) || !interests.every((i) => PROFILE_OPTIONS.interests.includes(i))) {
         return 'Invalid Interests';
+    }
+    if (!Array.isArray(wellnessPreferences) ||
+        !wellnessPreferences.every((p) => PROFILE_OPTIONS.wellnessPreferences.includes(p))) {
+        return 'Invalid Wellness Preferences';
     }
     if (!visibility || !['neighborhood', 'interests', 'wellness'].every(
         (section) => PROFILE_OPTIONS.visibility.includes(visibility[section]))) {
@@ -321,6 +333,10 @@ app.get('/api/profile', requireAuth, async (req, res) => {
             'SELECT interest FROM user_interests WHERE user_id = $1 ORDER BY interest',
             [req.userId]
         );
+        const wellnessResult = await pool.query(
+            'SELECT preference FROM user_wellness_preferences WHERE user_id = $1 ORDER BY preference',
+            [req.userId]
+        );
         const profile = profileResult.rows[0] || {};
 
         return res.status(200).json({
@@ -329,8 +345,8 @@ app.get('/api/profile', requireAuth, async (req, res) => {
             gradYear: profile.grad_year || null,
             neighborhood: profile.neighborhood || '',
             bio: profile.bio || '',
-            wellnessGoal: profile.wellness_goal || '',
             interests: interestResult.rows.map((row) => row.interest),
+            wellnessPreferences: wellnessResult.rows.map((row) => row.preference),
             visibility: {
                 neighborhood: profile.neighborhood_visibility || 'hokies',
                 interests: profile.interests_visibility || 'hokies',
@@ -346,39 +362,45 @@ app.get('/api/profile', requireAuth, async (req, res) => {
 
 // Create or replace the logged in user's profile
 app.put('/api/profile', requireAuth, async (req, res) => {
-    const {displayName, gradYear, neighborhood, bio, wellnessGoal, interests, visibility} = req.body;
+    const {displayName, gradYear, neighborhood, bio, wellnessPreferences, interests, visibility} = req.body;
 
     const validationError = validateProfile(req.body);
     if (validationError) {
         return res.status(400).json({message: validationError});
     }
 
-    // Profile and interests are saved together so a failure never leaves half a profile
+    // Profile, interests and wellness preferences are saved together so a failure never leaves half a profile
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         await client.query(
-            `INSERT INTO profiles (user_id, display_name, grad_year, neighborhood, bio, wellness_goal,
+            `INSERT INTO profiles (user_id, display_name, grad_year, neighborhood, bio,
                                    neighborhood_visibility, interests_visibility, wellness_visibility, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
              ON CONFLICT (user_id) DO UPDATE SET
                 display_name = EXCLUDED.display_name,
                 grad_year = EXCLUDED.grad_year,
                 neighborhood = EXCLUDED.neighborhood,
                 bio = EXCLUDED.bio,
-                wellness_goal = EXCLUDED.wellness_goal,
                 neighborhood_visibility = EXCLUDED.neighborhood_visibility,
                 interests_visibility = EXCLUDED.interests_visibility,
                 wellness_visibility = EXCLUDED.wellness_visibility,
                 updated_at = NOW()`,
             [req.userId, displayName || null, gradYear || null, neighborhood || null, bio || null,
-             wellnessGoal || null, visibility.neighborhood, visibility.interests, visibility.wellness]
+             visibility.neighborhood, visibility.interests, visibility.wellness]
         );
         await client.query('DELETE FROM user_interests WHERE user_id = $1', [req.userId]);
         for (const interest of new Set(interests)) {
             await client.query(
                 'INSERT INTO user_interests (user_id, interest) VALUES ($1, $2)',
                 [req.userId, interest]
+            );
+        }
+        await client.query('DELETE FROM user_wellness_preferences WHERE user_id = $1', [req.userId]);
+        for (const preference of new Set(wellnessPreferences)) {
+            await client.query(
+                'INSERT INTO user_wellness_preferences (user_id, preference) VALUES ($1, $2)',
+                [req.userId, preference]
             );
         }
         await client.query('COMMIT');
