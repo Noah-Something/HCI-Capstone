@@ -16,7 +16,7 @@ databases:
     plan: free
     databaseName: user_db
     postgresMajorVersion: "16"
-  - name: 
+  - name: events-database
     plan: free
     databaseName: events_db
     postgresMajorVersion: "16"
