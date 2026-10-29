@@ -109,6 +109,18 @@ app.post('/api/register', async (req, res) => {
         });
     }
 
+    // Match the users table limit and the signup form
+    if (username.length > 50) {
+        return res.status(400).json({
+            message: 'Username must be 50 characters or fewer'
+        });
+    }
+    if (password.length < 8) {
+        return res.status(400).json({
+            message: 'Password must be at least 8 characters'
+        });
+    }
+
     try {
         // Hash password with 12 rounds of bcrypt before storing
         const hashedPassword = await bcrypt.hash(password, 12);

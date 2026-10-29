@@ -1,22 +1,96 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HokieConnect – Create account</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=DM+Sans:wght@400;700&display=swap">
-  <link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>HokieConnect - Create account</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <div class="login-page">
+        <div class="login-left">
+            <p><b>HokieConnect</b></p>
+            <h1>Same Hokies.<br>New City.</h1>
+            <p>Find fellow Hokies, wellness meetups,events, and your new home in the D.C. area</p>
+        </div>
 
-  <div class="page" style="max-width:560px">
-    <div class="card coming-soon">
-      <span class="tag">Coming soon</span>
-      <h1 style="margin-top:16px">Create an account</h1>
-      <p class="gray">You'll pick your interests, wellness goal, and neighborhood here.</p>
-      <a href="index.html" class="btn btn-maroon">Back to Sign in</a>
+        <div class="login-right">
+            <h2> Create an account</h2>
+            <form id="signupForm">
+                <label for="username"> Username</label>
+                <input id="username" class="input" type="text" placeholder="hokiebird" maxlength="50" required>
+
+                <label for="password"> Password</label>
+                <input id="password" class="input" type="password" placeholder="********" minlength="8" required>
+
+                <label for="confirmPassword"> Confirm Password</label>
+                <input id="confirmPassword" class="input" type="password" placeholder="********" minlength="8" required>
+
+                <button type="submit" class="btn btn-maroon" style="width:100%">Create account</button>
+
+            </form>
+
+            <p id="signupStatus"></p>
+            <p class="gray"> Already have an account? <a href="index.html"><b>Sign in</b></a></p>
+        </div>
+
     </div>
-  </div>
+    <script>
+        const signupForm = document.getElementById('signupForm');
+        const signupStatus = document.getElementById('signupStatus');
 
+        signupForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            if (password !== confirmPassword) {
+                signupStatus.textContent = 'Passwords do not match.';
+                signupStatus.style.color = 'red';
+                return;
+            }
+
+            signupStatus.textContent = 'Creating account ...';
+            signupStatus.style.color = '';
+
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json'},
+                    body: JSON.stringify({ username, password }),
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    // Registration failed (e.g. username taken)
+                    signupStatus.textContent = data.message || 'Could not create account.';
+                    signupStatus.style.color = 'red';
+                    return;
+                }
+
+                // Account created, sign in automatically
+                const loginResponse = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json'},
+                    body: JSON.stringify({ username, password }),
+                });
+                const loginData = await loginResponse.json();
+
+                if (loginResponse.ok) {
+                    sessionStorage.setItem('authToken', loginData.token);
+                    window.location.href = 'home.html';
+                } else {
+                    window.location.href = 'index.html';
+                }
+            } catch (error) {
+                signupStatus.textContent = 'Could not reach the server. Is server.js running?';
+                signupStatus.style.color = 'red';
+            }
+        });
+    </script>
 </body>
 </html>
