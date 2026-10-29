@@ -2,7 +2,7 @@ services:
   - type: web
     name: HokieConnect
     runtime: node
-    plan: Pro
+    plan: starter
     buildCommand: npm install
     startCommand: node server.js
     envVars:
@@ -16,11 +16,7 @@ services:
           property: connectionString
 
 databases:
-  - name: user-database
-    plan: Pro
+  - name: info-database
+    plan: basic-256mb
     databaseName: user_db
-    postgresMajorVersion: "16"
-  - name: events-database
-    plan: free
-    databaseName: events_db
     postgresMajorVersion: "16"
