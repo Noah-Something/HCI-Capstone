@@ -147,3 +147,12 @@ textarea.input { font-family: inherit; resize: vertical; }
 .chip { padding: 4px 10px; border-radius: 999px; border: 1px solid #D9D1CC; font-size: 13px; }
 .chip-shared { background: var(--maroon-light); border-color: var(--maroon); color: var(--maroon); font-weight: bold; }
 .score-breakdown { color: var(--gray); font-size: 12px; margin: 14px 0 0; border-top: 1px solid var(--border); padding-top: 10px; }
+
+/* Home page "Your first connection" card */
+.connection-card { display: block; background: var(--maroon); border-color: var(--maroon); color: white; margin-bottom: 14px; }
+.connection-label { margin: 0 0 6px; font-size: 13px; font-weight: bold; letter-spacing: 0.5px; opacity: 0.85; }
+.connection-match { background: rgba(255, 255, 255, 0.12); border-radius: 12px; padding: 12px; margin: 10px 0; }
+.connection-match-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.connection-score { background: white; color: var(--maroon); padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: bold; white-space: nowrap; }
+.connection-detail { margin: 6px 0 0; font-size: 14px; opacity: 0.9; }
+.connection-action { margin: 0; font-weight: bold; }

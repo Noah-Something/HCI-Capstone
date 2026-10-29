@@ -42,10 +42,12 @@
 
       <!-- RIGHT: side panel -->
       <div>
-        <a href="hokies.html" class="card" style="display:block;background:var(--maroon);color:white;margin-bottom:14px">
-          <p style="margin:0 0 6px">YOUR FIRST CONNECTION</p>
-          <h2>5 Class of '26 Hokies live near you</h2>
-          <p style="margin:0">Say hi →</p>
+        <!-- app.js fills this in from /api/hokies -->
+        <a id="connectionCard" href="hokies.html" class="card connection-card">
+          <p class="connection-label">YOUR FIRST CONNECTION</p>
+          <h2 id="connectionHeadline">Finding Hokies near you ...</h2>
+          <div id="connectionMatch"></div>
+          <p id="connectionAction" class="connection-action">See all Hokies →</p>
         </a>
         <div class="card">
           <b>Map</b>
