@@ -21,13 +21,179 @@
   </nav>
 
   <div class="page">
-    <div class="card coming-soon">
-      <span class="tag">Coming soon</span>
-      <h1 style="margin-top:16px">Hokies near you</h1>
-      <p class="gray">Find VT alumni near you, filter by interests and employer, and see your match score.</p>
-      <a href="home.html" class="btn btn-maroon">Back to Discover</a>
+    <h1>Hokies near you</h1>
+    <p class="gray">Find fellow Virginia Tech alumni in the area. Your best matches share your interests and wellness preferences and live close by.</p>
+
+    <!-- Shown when the viewer's own profile is missing things that improve their matches -->
+    <div id="profileTip" class="card tip-card" hidden></div>
+
+    <!-- Filters -->
+    <div class="hokie-filters">
+      <label>Distance
+        <select id="distanceFilter" class="input">
+          <option value="">Any distance</option>
+          <option value="2">Within 2 miles</option>
+          <option value="5">Within 5 miles</option>
+          <option value="10">Within 10 miles</option>
+          <option value="25">Within 25 miles</option>
+        </select>
+      </label>
+      <label>Interest
+        <select id="interestFilter" class="input">
+          <option value="">Any interest</option>
+        </select>
+      </label>
+      <label>Wellness
+        <select id="wellnessFilter" class="input">
+          <option value="">Any wellness preference</option>
+        </select>
+      </label>
+      <label>Class year
+        <input id="gradYearFilter" class="input" type="number" min="1872" placeholder="Any year">
+      </label>
     </div>
+
+    <p id="resultCount" class="gray"></p>
+    <div id="hokieList" class="event-grid"></div>
   </div>
+
+  <script>
+    const token = sessionStorage.getItem('authToken');
+    if (!token) {
+      window.location.href = 'index.html';
+    }
+
+    const hokieList = document.getElementById('hokieList');
+    const resultCount = document.getElementById('resultCount');
+    let scoreWeights = {};
+
+    // Names and bios are typed by users, so escape them before putting them in the page
+    const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[char]);
+
+    // Sends the login token with every request, goes back to sign in if the session is no longer valid
+    const apiRequest = async (url) => {
+      const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (response.status === 401) {
+        sessionStorage.removeItem('authToken');
+        window.location.href = 'index.html';
+      }
+      return response;
+    };
+
+    const formatDistance = (miles) => {
+      if (miles === null) return '';
+      return miles < 1 ? 'Less than 1 mi away' : `${Math.round(miles)} mi away`;
+    };
+
+    // Shared items are highlighted so it is clear why two Hokies matched
+    const makeChips = (items, shared) => items
+      .map((item) => `<span class="chip${shared.includes(item) ? ' chip-shared' : ''}">${escapeHtml(item)}</span>`)
+      .join('');
+
+    const makeHokieCard = (hokie) => {
+      const details = [
+        hokie.gradYear ? `Class of ${hokie.gradYear}` : '',
+        escapeHtml(hokie.neighborhood),
+        formatDistance(hokie.distanceMiles)
+      ].filter(Boolean).join(' · ');
+
+      const breakdown = [
+        ['Interests', 'interests'], ['Wellness', 'wellness'], ['Distance', 'distance'], ['Class year', 'gradYear']
+      ].map(([label, key]) => `${label} ${hokie.breakdown[key]}/${scoreWeights[key]}`).join(' · ');
+
+      return `
+        <div class="card hokie-card">
+          <div class="hokie-header">
+            <div>
+              <h3 style="margin:0">${escapeHtml(hokie.displayName)}</h3>
+              <p class="gray" style="margin:4px 0 0">@${escapeHtml(hokie.username)}</p>
+            </div>
+            <span class="match-score">${hokie.score}% match</span>
+          </div>
+          ${details ? `<p class="gray">${details}</p>` : ''}
+          ${hokie.bio ? `<p>${escapeHtml(hokie.bio)}</p>` : ''}
+          ${hokie.interests.length ? `<p class="chip-label">Interests</p><div class="chips">${makeChips(hokie.interests, hokie.sharedInterests)}</div>` : ''}
+          ${hokie.wellnessPreferences.length ? `<p class="chip-label">Wellness</p><div class="chips">${makeChips(hokie.wellnessPreferences, hokie.sharedWellness)}</div>` : ''}
+          <p class="score-breakdown">${breakdown}</p>
+        </div>`;
+    };
+
+    const showProfileTip = (viewer) => {
+      const missing = [];
+      if (!viewer.hasLocation) missing.push('your location');
+      if (!viewer.hasInterests) missing.push('your interests');
+      if (!viewer.hasWellness) missing.push('your wellness preferences');
+      if (!viewer.hasGradYear) missing.push('your class year');
+
+      const tip = document.getElementById('profileTip');
+      tip.hidden = missing.length === 0;
+      if (missing.length) {
+        tip.innerHTML = `Add ${missing.join(', ')} to <a href="profile.html"><b>your profile</b></a> to get better matches.`;
+      }
+    };
+
+    const loadHokies = async () => {
+      const params = new URLSearchParams();
+      const filters = {
+        maxDistance: document.getElementById('distanceFilter').value,
+        interest: document.getElementById('interestFilter').value,
+        wellness: document.getElementById('wellnessFilter').value,
+        gradYear: document.getElementById('gradYearFilter').value
+      };
+      for (const [key, value] of Object.entries(filters)) {
+        if (value) params.set(key, value);
+      }
+
+      resultCount.textContent = 'Finding Hokies ...';
+      try {
+        const response = await apiRequest(`/api/hokies?${params}`);
+        if (!response.ok) throw new Error('Load failed');
+        const data = await response.json();
+
+        showProfileTip(data.viewer);
+        resultCount.textContent = data.hokies.length === 1 ? '1 Hokie found' : `${data.hokies.length} Hokies found`;
+        hokieList.innerHTML = data.hokies.length
+          ? data.hokies.map(makeHokieCard).join('')
+          : '<p class="gray">No Hokies match these filters yet. Try widening your search.</p>';
+      } catch (error) {
+        resultCount.textContent = 'Could not load Hokies. Is server.js running?';
+        hokieList.innerHTML = '';
+      }
+    };
+
+    const loadFilters = async () => {
+      const response = await fetch('/api/profile/options');
+      const options = await response.json();
+      scoreWeights = options.scoreWeights;
+
+      const addOptions = (selectId, values) => {
+        for (const value of values) {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = value;
+          document.getElementById(selectId).appendChild(option);
+        }
+      };
+      addOptions('interestFilter', options.interests);
+      addOptions('wellnessFilter', options.wellnessPreferences);
+    };
+
+    for (const id of ['distanceFilter', 'interestFilter', 'wellnessFilter']) {
+      document.getElementById(id).addEventListener('change', loadHokies);
+    }
+    // Wait until the user stops typing a year before searching
+    let typingTimer;
+    document.getElementById('gradYearFilter').addEventListener('input', () => {
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(loadHokies, 400);
+    });
+
+    loadFilters().then(loadHokies).catch(() => {
+      resultCount.textContent = 'Could not load Hokies. Is server.js running?';
+    });
+  </script>
 
 </body>
 </html>

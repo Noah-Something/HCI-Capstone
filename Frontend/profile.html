@@ -53,9 +53,19 @@
           <select id="neighborhoodVisibility" class="visibility-select" aria-label="Who can see your neighborhood"></select>
         </div>
 
-        <label for="neighborhood">Where do you live?</label>
-        <input id="neighborhood" class="input" type="text" maxlength="100" list="neighborhoodList" placeholder="Arlington">
-        <datalist id="neighborhoodList"></datalist>
+        <p>Your neighborhood: <b id="currentNeighborhood">Not set</b></p>
+        <p class="gray">Used to find Hokies near you. Your exact location is never stored or shown, only your neighborhood and an approximate distance.</p>
+
+        <div class="location-actions">
+          <button type="button" id="useLocationButton" class="btn btn-maroon">Use my current location</button>
+          <button type="button" id="removeLocationButton" class="btn" hidden>Remove location</button>
+        </div>
+        <p id="locationStatus"></p>
+
+        <label for="neighborhoodSelect">Rather not share your location? Pick the closest neighborhood:</label>
+        <select id="neighborhoodSelect" class="input">
+          <option value="">Choose a neighborhood</option>
+        </select>
       </div>
 
       <!-- Interests: pick any number -->
@@ -126,6 +136,75 @@
     const selectedChips = (containerId) =>
       [...document.getElementById(containerId).querySelectorAll('.filter.active')].map((chip) => chip.dataset.value);
 
+    // ===== Location (saved right away, separate from the Save profile button) =====
+    const locationStatus = document.getElementById('locationStatus');
+
+    const showNeighborhood = (neighborhood) => {
+      document.getElementById('currentNeighborhood').textContent = neighborhood || 'Not set';
+      document.getElementById('removeLocationButton').hidden = !neighborhood;
+    };
+
+    const setLocationStatus = (message, color) => {
+      locationStatus.textContent = message;
+      locationStatus.style.color = color || '';
+    };
+
+    const saveLocation = async (location) => {
+      try {
+        const response = await apiRequest('/api/profile/location', {
+          method: 'PUT',
+          body: JSON.stringify(location)
+        });
+        const data = await response.json();
+        if (response.ok) {
+          showNeighborhood(data.neighborhood);
+          setLocationStatus('Location saved!', 'green');
+        } else {
+          setLocationStatus(data.message || 'Could not save location.', 'red');
+        }
+      } catch (error) {
+        setLocationStatus('Could not reach the server. Is server.js running?', 'red');
+      }
+    };
+
+    document.getElementById('useLocationButton').addEventListener('click', () => {
+      if (!navigator.geolocation) {
+        setLocationStatus('Your browser does not support location. Pick a neighborhood below instead.', 'red');
+        return;
+      }
+      setLocationStatus('Finding your location ...');
+      navigator.geolocation.getCurrentPosition(
+        (position) => saveLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        }),
+        (error) => {
+          const message = error.code === error.PERMISSION_DENIED
+            ? 'Location access was blocked. Allow it in your browser settings, or pick a neighborhood below.'
+            : 'Could not find your location. Try again, or pick a neighborhood below.';
+          setLocationStatus(message, 'red');
+        },
+        { enableHighAccuracy: false, timeout: 10000 }
+      );
+    });
+
+    document.getElementById('neighborhoodSelect').addEventListener('change', (event) => {
+      if (event.target.value) saveLocation({ neighborhood: event.target.value });
+    });
+
+    document.getElementById('removeLocationButton').addEventListener('click', async () => {
+      try {
+        const response = await apiRequest('/api/profile/location', { method: 'DELETE' });
+        if (response.ok) {
+          showNeighborhood('');
+          document.getElementById('neighborhoodSelect').value = '';
+          setLocationStatus('Location removed.');
+        }
+      } catch (error) {
+        setLocationStatus('Could not reach the server. Is server.js running?', 'red');
+      }
+    });
+
     const loadProfile = async () => {
       try {
         const [optionsResponse, profileResponse] = await Promise.all([
@@ -142,7 +221,8 @@
         for (const place of options.neighborhoods) {
           const option = document.createElement('option');
           option.value = place;
-          document.getElementById('neighborhoodList').appendChild(option);
+          option.textContent = place;
+          document.getElementById('neighborhoodSelect').appendChild(option);
         }
         for (const section of ['neighborhood', 'interests', 'wellness']) {
           const select = document.getElementById(`${section}Visibility`);
@@ -160,7 +240,7 @@
         document.getElementById('displayName').value = profile.displayName;
         document.getElementById('gradYear').value = profile.gradYear || '';
         document.getElementById('bio').value = profile.bio;
-        document.getElementById('neighborhood').value = profile.neighborhood;
+        showNeighborhood(profile.hasLocation ? profile.neighborhood : '');
         for (const chip of document.querySelectorAll('#interestChoices .filter')) {
           if (profile.interests.includes(chip.dataset.value)) chip.classList.add('active');
         }
@@ -188,7 +268,6 @@
       const profile = {
         displayName: document.getElementById('displayName').value.trim(),
         gradYear: gradYear ? Number(gradYear) : null,
-        neighborhood: document.getElementById('neighborhood').value.trim(),
         bio: document.getElementById('bio').value.trim(),
         interests: selectedChips('interestChoices'),
         wellnessPreferences: selectedChips('wellnessChoices'),

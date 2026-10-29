@@ -133,3 +133,17 @@ a { color: var(--maroon); text-decoration: none; }
 .visibility-select { padding: 6px 10px; border: 1px solid #D9D1CC; border-radius: 10px; font-size: 14px; background: white; }
 textarea.input { font-family: inherit; resize: vertical; }
 #logoutButton { margin-top: 8px; }
+.location-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Hokies page */
+.tip-card { background: var(--maroon-light); border-color: var(--maroon-light); margin-bottom: 16px; }
+.hokie-filters { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0 4px; }
+.hokie-filters label { font-weight: bold; font-size: 14px; }
+@media (max-width: 800px) { .hokie-filters { grid-template-columns: 1fr 1fr; } }
+.hokie-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.match-score { background: var(--maroon); color: white; padding: 6px 12px; border-radius: 999px; font-weight: bold; font-size: 14px; white-space: nowrap; }
+.chip-label { font-weight: bold; font-size: 13px; margin: 12px 0 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { padding: 4px 10px; border-radius: 999px; border: 1px solid #D9D1CC; font-size: 13px; }
+.chip-shared { background: var(--maroon-light); border-color: var(--maroon); color: var(--maroon); font-weight: bold; }
+.score-breakdown { color: var(--gray); font-size: 12px; margin: 14px 0 0; border-top: 1px solid var(--border); padding-top: 10px; }
