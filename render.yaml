@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: HokieConnect
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hokieconnect-db
+          property: connectionString
+
+databases:
+  - name: hokieconnect-db
+    plan: basic-256mb
+    databaseName: hokieconnect_db
+    postgresMajorVersion: "16"
