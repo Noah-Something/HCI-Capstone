@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hokies Near You · HokieConnect</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header id="site-header" class="site-header"></header>
+
+    <main id="main" class="container">
+        <header class="page-head">
+            <h1>Hokies near you</h1>
+            <p class="lede">
+                Alumni in the D.C. area who chose to be discoverable. Locations are shown by neighborhood only.
+            </p>
+        </header>
+
+        <div id="privacy-notice"></div>
+
+        <section class="panel filters" aria-label="Filter Hokies">
+            <div class="filter-row">
+                <label class="field">
+                    <span>Search</span>
+                    <input type="search" id="hokie-search" placeholder="Name or major">
+                </label>
+                <label class="field">
+                    <span>Neighborhood</span>
+                    <select id="hokie-hood">
+                        <option value="">All neighborhoods</option>
+                    </select>
+                </label>
+                <label class="checkbox">
+                    <input type="checkbox" id="hokie-shared">
+                    Shared interests only
+                </label>
+            </div>
+            <div id="interest-filter"></div>
+        </section>
+
+        <p id="hokie-count" class="muted" aria-live="polite"></p>
+        <div id="hokie-list" class="card-grid"></div>
+    </main>
+
+    <dialog id="hi-dialog" aria-labelledby="hi-title">
+        <form method="dialog" id="hi-form">
+            <h2 id="hi-title">Say hi</h2>
+            <p class="muted small">Starting with something you have in common makes it easier to reply.</p>
+            <label class="field">
+                <span>Message</span>
+                <textarea id="hi-message" rows="5" maxlength="500" required></textarea>
+            </label>
+            <div class="actions">
+                <button type="submit" value="cancel" class="btn btn-secondary" formnovalidate>Cancel</button>
+                <button type="submit" value="send" class="btn btn-primary">Send</button>
+            </div>
+        </form>
+    </dialog>
+
+    <footer id="site-footer" class="site-footer"></footer>
+
+    <script src="js/data.js"></script>
+    <script src="js/store.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/hokies.js"></script>
+</body>
+</html>

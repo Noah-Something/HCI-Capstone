@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Events · HokieConnect</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header id="site-header" class="site-header"></header>
+
+    <main id="main" class="container">
+        <header class="page-head">
+            <h1>Events</h1>
+            <p class="lede">Wellness and social meetups with Hokies around D.C. RSVP so the host knows you're coming.</p>
+        </header>
+
+        <section class="panel filters" aria-label="Filter events">
+            <div class="filter-row">
+                <div id="event-tabs"></div>
+                <label class="field">
+                    <span>Activity</span>
+                    <select id="event-category">
+                        <option value="">All activities</option>
+                    </select>
+                </label>
+            </div>
+        </section>
+
+        <p id="event-count" class="muted" aria-live="polite"></p>
+        <div id="event-list"></div>
+    </main>
+
+    <footer id="site-footer" class="site-footer"></footer>
+
+    <script src="js/data.js"></script>
+    <script src="js/store.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/events.js"></script>
+</body>
+</html>

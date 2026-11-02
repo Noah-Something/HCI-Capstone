@@ -4,40 +4,68 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HokieConnect</title>
-
-    <style>
-        #map {
-            height: 400px;
-            width: 50%;
-            margin-top: 20px;
-        }
-    </style>
-
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <h2>
-        Current Testing, Geolocational Data & Landmarks
-    </h2>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header id="site-header" class="site-header"></header>
 
-    <button id="getLocationButton">
-        Retrieve Location
-    </button>
+    <main id="main" class="container">
+        <section class="hero">
+            <p class="eyebrow">Washington, D.C. area</p>
+            <h1 id="welcome">Welcome to D.C., Hokie</h1>
+            <p class="lede">
+                Find fellow Hokies nearby, join groups that get you moving, and build a life outside of work.
+            </p>
+            <div class="actions">
+                <a class="btn btn-primary" href="hokies.html">Find Hokies near you</a>
+                <a class="btn btn-secondary" href="events.html">See what's coming up</a>
+            </div>
+        </section>
 
-    <!-- Display for status and coordinates -->
-    <p id="status"></p>
-    <p id="coordinates"></p>
+        <section class="panel" aria-labelledby="journey-title">
+            <div class="section-head">
+                <h2 id="journey-title">Your path to belonging</h2>
+                <span id="journey-count" class="muted"></span>
+            </div>
+            <div class="progress" role="progressbar" aria-labelledby="journey-title" aria-valuemin="0" aria-valuemax="4" id="journey-progress">
+                <div class="progress-bar" id="journey-bar"></div>
+            </div>
+            <ol id="journey-steps" class="journey"></ol>
+        </section>
 
-    <div id="map"></div>
+        <div class="grid-2">
+            <section class="panel" aria-labelledby="matches-title">
+                <div class="section-head">
+                    <h2 id="matches-title">Hokies you might click with</h2>
+                    <a href="hokies.html">See all</a>
+                </div>
+                <div id="home-matches" class="stack"></div>
+            </section>
 
-    <div id="landmarkResults"></div>
+            <section class="panel" aria-labelledby="events-title">
+                <div class="section-head">
+                    <h2 id="events-title">Coming up</h2>
+                    <a href="events.html">All events</a>
+                </div>
+                <div id="home-events" class="stack"></div>
+            </section>
+        </div>
 
-    <script src="main.js"></script>
+        <section class="panel callout">
+            <div>
+                <h2>Find your third space</h2>
+                <p class="muted">Gyms, parks, cafés, and libraries near you: places to unwind that aren't home or work.</p>
+            </div>
+            <a class="btn btn-primary" href="explore.html">Explore nearby</a>
+        </section>
+    </main>
 
-    <!-- Google Maps API -->
-    <script
-        async
-        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCjGmXODRqYik-f9Jt1feVV39D5rpP5JvA&loading=async&callback=initMap">
-    </script>
+    <footer id="site-footer" class="site-footer"></footer>
+
+    <script src="js/data.js"></script>
+    <script src="js/store.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/home.js"></script>
 </body>
 </html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Groups · HokieConnect</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header id="site-header" class="site-header"></header>
+
+    <main id="main" class="container">
+        <header class="page-head page-head-row">
+            <div>
+                <h1>Groups</h1>
+                <p class="lede">Recurring activities with Hokies in your area. Show up once, then keep coming back.</p>
+            </div>
+            <button type="button" class="btn btn-primary" id="create-group-button">Create a group</button>
+        </header>
+
+        <section class="panel filters" aria-label="Filter groups">
+            <div class="filter-row">
+                <div id="group-tabs"></div>
+                <label class="field">
+                    <span>Activity</span>
+                    <select id="group-interest">
+                        <option value="">All activities</option>
+                    </select>
+                </label>
+            </div>
+        </section>
+
+        <p id="group-count" class="muted" aria-live="polite"></p>
+        <div id="group-list" class="card-grid"></div>
+    </main>
+
+    <dialog id="group-dialog" aria-labelledby="group-dialog-title">
+        <form method="dialog" id="group-form">
+            <h2 id="group-dialog-title">Create a group</h2>
+            <label class="field">
+                <span>Group name</span>
+                <input type="text" id="new-group-name" maxlength="60" required placeholder="e.g. Hokie Climbing Crew">
+            </label>
+            <div class="field-row">
+                <label class="field">
+                    <span>Activity</span>
+                    <select id="new-group-interest" required></select>
+                </label>
+                <label class="field">
+                    <span>Neighborhood</span>
+                    <select id="new-group-hood" required></select>
+                </label>
+            </div>
+            <label class="field">
+                <span>When do you meet?</span>
+                <input type="text" id="new-group-schedule" maxlength="60" required placeholder="e.g. Thursdays, 7 PM">
+            </label>
+            <label class="field">
+                <span>Description</span>
+                <textarea id="new-group-description" rows="3" maxlength="280" required placeholder="What will you do together? Who's it for?"></textarea>
+            </label>
+            <div class="actions">
+                <button type="submit" value="cancel" class="btn btn-secondary" formnovalidate>Cancel</button>
+                <button type="submit" value="create" class="btn btn-primary">Create group</button>
+            </div>
+        </form>
+    </dialog>
+
+    <footer id="site-footer" class="site-footer"></footer>
+
+    <script src="js/data.js"></script>
+    <script src="js/store.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/groups.js"></script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Explore Nearby · HokieConnect</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header id="site-header" class="site-header"></header>
+
+    <main id="main" class="container">
+        <header class="page-head">
+            <h1>Find your third space</h1>
+            <p class="lede">
+                Places to work out, unwind, and meet people outside of home and work.
+                Your location is only used in your browser to search, and is never shared.
+            </p>
+        </header>
+
+        <section class="panel filters" aria-label="Search options">
+            <div class="filter-row">
+                <div id="category-filter"></div>
+                <button type="button" class="btn btn-secondary" id="locate-button" disabled>Use my location</button>
+            </div>
+            <p id="explore-status" class="muted small" role="status">Loading map…</p>
+        </section>
+
+        <div class="explore-layout">
+            <div id="map" class="map" aria-label="Map of nearby places"></div>
+            <div id="place-list" class="place-list"></div>
+        </div>
+    </main>
+
+    <footer id="site-footer" class="site-footer"></footer>
+
+    <script src="js/data.js"></script>
+    <script src="js/store.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/explore.js"></script>
+
+    <!-- Google Maps API -->
+    <script
+        async
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCjGmXODRqYik-f9Jt1feVV39D5rpP5JvA&loading=async&callback=initMap">
+    </script>
+</body>
+</html>

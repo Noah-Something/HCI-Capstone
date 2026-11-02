@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Profile · HokieConnect</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header id="site-header" class="site-header"></header>
+
+    <main id="main" class="container narrow">
+        <header class="page-head">
+            <h1>Your profile</h1>
+            <p class="lede">This is how other Hokies find you. You decide what they see.</p>
+        </header>
+
+        <form id="profile-form" class="stack-lg" novalidate>
+            <fieldset class="panel">
+                <legend>About you</legend>
+                <label class="field">
+                    <span>Name <span class="required" aria-hidden="true">*</span></span>
+                    <input type="text" id="profile-name" maxlength="60" required autocomplete="name" aria-describedby="name-error">
+                    <span class="field-error" id="name-error"></span>
+                </label>
+                <div class="field-row">
+                    <label class="field">
+                        <span>Graduation year</span>
+                        <select id="profile-year"></select>
+                    </label>
+                    <label class="field">
+                        <span>Major</span>
+                        <input type="text" id="profile-major" maxlength="80">
+                    </label>
+                </div>
+                <label class="field">
+                    <span>Neighborhood</span>
+                    <select id="profile-hood">
+                        <option value="">Choose your neighborhood</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span>Short bio</span>
+                    <textarea id="profile-bio" rows="3" maxlength="280" placeholder="What brought you to D.C.? What do you like to do on weekends?"></textarea>
+                </label>
+            </fieldset>
+
+            <fieldset class="panel">
+                <legend>Interests</legend>
+                <p class="muted small">We use these to suggest Hokies, groups, and events you'll enjoy.</p>
+                <div id="profile-interests" class="chip-group"></div>
+            </fieldset>
+
+            <fieldset class="panel">
+                <legend>Privacy</legend>
+                <p class="muted small">Who can find you on the Hokies page?</p>
+                <div class="radio-list">
+                    <label class="radio">
+                        <input type="radio" name="visibility" value="hokies">
+                        <span><strong>All Hokies in the D.C. area</strong><br><span class="muted small">Best for meeting new people.</span></span>
+                    </label>
+                    <label class="radio">
+                        <input type="radio" name="visibility" value="connections">
+                        <span><strong>Only Hokies I've messaged</strong><br><span class="muted small">Others can't find you, but people you reach out to can see your profile.</span></span>
+                    </label>
+                    <label class="radio">
+                        <input type="radio" name="visibility" value="hidden">
+                        <span><strong>Hidden</strong><br><span class="muted small">Browse without being discoverable.</span></span>
+                    </label>
+                </div>
+                <label class="checkbox">
+                    <input type="checkbox" id="profile-show-hood">
+                    Show my neighborhood on my profile
+                </label>
+                <p class="notice small">HokieConnect never shares your exact location. At most, other Hokies see your neighborhood.</p>
+            </fieldset>
+
+            <div class="actions">
+                <button type="submit" class="btn btn-primary">Save profile</button>
+            </div>
+        </form>
+
+        <section class="panel danger-zone" aria-labelledby="reset-title">
+            <h2 id="reset-title">Reset demo data</h2>
+            <p class="muted small">Clears your profile, messages, groups, and RSVPs from this browser.</p>
+            <button type="button" class="btn btn-secondary" id="reset-button">Reset everything</button>
+        </section>
+    </main>
+
+    <footer id="site-footer" class="site-footer"></footer>
+
+    <script src="js/data.js"></script>
+    <script src="js/store.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/profile.js"></script>
+</body>
+</html>
