@@ -119,6 +119,9 @@ const initDatabase = async () => {
             read_at TIMESTAMPTZ,
             CHECK (sender_id <> recipient_id)
         );
+        -- Extra event details for the Discover page (category matches the interest list, tip is for first-timers)
+        ALTER TABLE events ADD COLUMN IF NOT EXISTS category VARCHAR(50);
+        ALTER TABLE events ADD COLUMN IF NOT EXISTS newcomer_tip TEXT;
 
         -- Speed up lookups like "all groups/events for this user"
         CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id, recipient_id, created_at);
@@ -821,6 +824,147 @@ app.post('/api/messages/:username', requireAuth, async (req, res) => {
         return res.status(201).json({
             message: { id: message.id, fromMe: true, body: message.body, createdAt: message.created_at, read: false }
         });
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// ===== Events =====
+// Every event comes back with how many Hokies are going and whether the logged in user is going
+// $1 is always the logged in user's id
+const EVENT_SELECT = `
+    SELECT events.id, events.title, events.description, events.location, events.category,
+           events.newcomer_tip, events.starts_at, events.ends_at, events.latitude, events.longitude,
+           (SELECT COUNT(*) FROM event_attendees a
+            WHERE a.event_id = events.id AND a.status = 'going')::int AS going_count,
+           EXISTS (SELECT 1 FROM event_attendees a
+                   WHERE a.event_id = events.id AND a.user_id = $1 AND a.status = 'going') AS i_am_going
+    FROM events`;
+
+// Turn a database row into the shape the frontend uses (camelCase like the other routes)
+const formatEvent = (row) => ({
+    id: row.id,
+    title: row.title,
+    description: row.description || '',
+    location: row.location || '',
+    category: row.category || 'Social',
+    newcomerTip: row.newcomer_tip || '',
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    goingCount: row.going_count,
+    iAmGoing: row.i_am_going
+});
+
+const countGoing = async (eventId) => {
+    const result = await pool.query(
+        `SELECT COUNT(*)::int AS count FROM event_attendees WHERE event_id = $1 AND status = 'going'`,
+        [eventId]
+    );
+    return result.rows[0].count;
+};
+
+// List all events, soonest first
+app.get('/api/events', requireAuth, async (req, res) => {
+    try {
+        const result = await pool.query(`${EVENT_SELECT} ORDER BY events.starts_at`, [req.userId]);
+        return res.status(200).json({events: result.rows.map(formatEvent)});
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// Get one event by id
+app.get('/api/events/:id', requireAuth, async (req, res) => {
+    const eventId = Number(req.params.id);
+    if (!Number.isInteger(eventId)) {
+        return res.status(404).json({message: 'Event Not Found'});
+    }
+    try {
+        const result = await pool.query(`${EVENT_SELECT} WHERE events.id = $2`, [req.userId, eventId]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({message: 'Event Not Found'});
+        }
+        return res.status(200).json({event: formatEvent(result.rows[0])});
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// Create an event, the logged in user is the creator
+// Body: {title, startsAt, category, location, description, newcomerTip}
+app.post('/api/events', requireAuth, async (req, res) => {
+    const {title, startsAt, category, location, description, newcomerTip} = req.body;
+
+    if (!title || typeof title !== 'string' || title.length > 150) {
+        return res.status(400).json({message: 'Title is required and must be 150 characters or fewer'});
+    }
+    if (!startsAt || isNaN(new Date(startsAt).getTime())) {
+        return res.status(400).json({message: 'A valid start time is required'});
+    }
+    // Event categories use the same list as profile interests so filters and matching line up
+    if (category && !PROFILE_OPTIONS.interests.includes(category)) {
+        return res.status(400).json({message: 'Invalid Category'});
+    }
+
+    try {
+        const result = await pool.query(
+            `INSERT INTO events (title, starts_at, category, location, description, newcomer_tip, creator_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+            [title, new Date(startsAt), category || null, location || null,
+             description || null, newcomerTip || null, req.userId]
+        );
+        return res.status(201).json({message: 'Event Created', id: result.rows[0].id});
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// RSVP "going" to an event
+app.post('/api/events/:id/rsvp', requireAuth, async (req, res) => {
+    const eventId = Number(req.params.id);
+    if (!Number.isInteger(eventId)) {
+        return res.status(404).json({message: 'Event Not Found'});
+    }
+    try {
+        await pool.query(
+            `INSERT INTO event_attendees (event_id, user_id, status) VALUES ($1, $2, 'going')
+             ON CONFLICT (event_id, user_id) DO UPDATE SET status = 'going', responded_at = NOW()`,
+            [eventId, req.userId]
+        );
+        return res.status(200).json({message: 'RSVP Saved', goingCount: await countGoing(eventId)});
+    } catch (error) {
+        // 23503 is Postgres' foreign key violation code, meaning the event does not exist
+        if (error.code === '23503') {
+            return res.status(404).json({message: 'Event Not Found'});
+        }
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// Cancel an RSVP
+app.delete('/api/events/:id/rsvp', requireAuth, async (req, res) => {
+    const eventId = Number(req.params.id);
+    if (!Number.isInteger(eventId)) {
+        return res.status(404).json({message: 'Event Not Found'});
+    }
+    try {
+        await pool.query(
+            'DELETE FROM event_attendees WHERE event_id = $1 AND user_id = $2',
+            [eventId, req.userId]
+        );
+        return res.status(200).json({message: 'RSVP Removed', goingCount: await countGoing(eventId)});
     } catch (error) {
         return res.status(500).json({
             message: 'Internal Server Error'
