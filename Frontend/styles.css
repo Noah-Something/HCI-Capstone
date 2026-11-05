@@ -199,8 +199,39 @@ textarea.input { font-family: inherit; resize: vertical; }
 .hokie-actions { margin-top: 12px; }
 
 
-* ---------- Event details page ---------- */
+/* ---------- Event details page ---------- */
 .event-detail { max-width: 700px; margin-top: 16px; padding: 0; overflow: hidden; }
 .event-detail h1 { font-size: 28px; }
 .tip { background: #FFF4EA; color: #4A2A0F; padding: 12px; border-radius: 12px; }
 .btn-going { background: var(--maroon-light); color: var(--maroon); border-color: var(--maroon); }
+
+/* Events tab */
+.events-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.event-filters { display: grid; grid-template-columns: 2fr repeat(4, 1fr); gap: 12px; margin: 16px 0 4px; }
+.event-filters label { font-weight: bold; font-size: 14px; }
+@media (max-width: 800px) { .event-filters { grid-template-columns: 1fr 1fr; } }
+.events-map { height: 320px; border-radius: 16px; border: 1px solid var(--border); margin: 8px 0 16px; z-index: 0; }
+.event-card-image { display: block; width: 100%; height: 160px; object-fit: cover; }
+.event-host { font-size: 14px; margin: 0 0 8px; }
+
+/* Event details page additions */
+.event-detail-image { display: block; width: 100%; max-height: 360px; object-fit: cover; }
+.event-description { white-space: pre-wrap; }
+.event-detail-map { height: 240px; border-radius: 12px; border: 1px solid var(--border); margin: 16px 0 8px; z-index: 0; }
+.delete-button { display: block; margin-top: 20px; color: #B3261E; border-color: #E8B4B0; }
+
+/* Create event page */
+.picker-map { height: 340px; border-radius: 12px; border: 1px solid var(--border); cursor: crosshair; z-index: 0; }
+.host-choice { display: flex; flex-wrap: wrap; gap: 16px; margin: 6px 0 14px; }
+.host-choice label { font-weight: normal; }
+.time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 600px) { .time-row { grid-template-columns: 1fr; } }
+.tag-remove { cursor: pointer; font: inherit; font-size: 13px; }
+.image-preview { display: block; max-width: 100%; max-height: 260px; border-radius: 12px; margin: 12px 0 8px; }
+
+
+/* Let filter boxes shrink on narrow screens instead of pushing the page wider than the phone */
+.event-filters > label, .hokie-filters > label { min-width: 0; }
+@media (max-width: 500px) { .event-filters, .hokie-filters { grid-template-columns: 1fr; } }
+.events-header { margin-bottom: 8px; }
+.events-header > h2 { margin: 0; }

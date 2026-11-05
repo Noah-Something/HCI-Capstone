@@ -123,6 +123,22 @@ const initDatabase = async () => {
         ALTER TABLE events ADD COLUMN IF NOT EXISTS category VARCHAR(50);
         ALTER TABLE events ADD COLUMN IF NOT EXISTS newcomer_tip TEXT;
 
+        -- Link table: short tags on an event (lowercase, see normalizeTag)
+        CREATE TABLE IF NOT EXISTS event_tags (
+            event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+            tag VARCHAR(25) NOT NULL,
+            PRIMARY KEY (event_id, tag)
+        );
+
+        -- One optional image per event, stored in the database because Render's disk is wiped on every deploy
+        CREATE TABLE IF NOT EXISTS event_images (
+            event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+            content_type VARCHAR(20) NOT NULL,
+            data BYTEA NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_event_tags_tag ON event_tags(tag);
+
         -- Speed up lookups like "all groups/events for this user"
         CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id, recipient_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(recipient_id, sender_id, created_at);
@@ -832,19 +848,30 @@ app.post('/api/messages/:username', requireAuth, async (req, res) => {
 });
 
 // ===== Events =====
-// Every event comes back with how many Hokies are going and whether the logged in user is going
+// Every event comes back with how many Hokies are going, whether the logged in user is going,
+// who is hosting it (a person or a group), and whether it has an image
 // $1 is always the logged in user's id
 const EVENT_SELECT = `
     SELECT events.id, events.title, events.description, events.location, events.category,
            events.newcomer_tip, events.starts_at, events.ends_at, events.latitude, events.longitude,
-           (SELECT COUNT(*) FROM event_attendees a
-            WHERE a.event_id = events.id AND a.status = 'going')::int AS going_count,
-           EXISTS (SELECT 1 FROM event_attendees a
-                   WHERE a.event_id = events.id AND a.user_id = $1 AND a.status = 'going') AS i_am_going
-    FROM events`;
+           events.creator_id, events.group_id,
+           creator.username AS creator_username, creator_profile.display_name AS creator_display_name,
+           host_group.name AS group_name, event_images.updated_at AS image_updated_at,
+           COALESCE(going.going_count, 0) AS going_count,
+           (my_rsvp.user_id IS NOT NULL) AS i_am_going
+    FROM events
+    JOIN users creator ON creator.id = events.creator_id
+    LEFT JOIN profiles creator_profile ON creator_profile.user_id = events.creator_id
+    LEFT JOIN groups host_group ON host_group.id = events.group_id
+    LEFT JOIN event_images ON event_images.event_id = events.id
+    LEFT JOIN (SELECT event_id, COUNT(*)::int AS going_count FROM event_attendees
+               WHERE status = 'going' GROUP BY event_id) going ON going.event_id = events.id
+    LEFT JOIN event_attendees my_rsvp
+           ON my_rsvp.event_id = events.id AND my_rsvp.user_id = $1 AND my_rsvp.status = 'going'`;
 
 // Turn a database row into the shape the frontend uses (camelCase like the other routes)
-const formatEvent = (row) => ({
+// tags and distanceMiles are worked out separately and passed in
+const formatEvent = (row, viewerId, tags = [], distanceMiles = null) => ({
     id: row.id,
     title: row.title,
     description: row.description || '',
@@ -855,8 +882,94 @@ const formatEvent = (row) => ({
     endsAt: row.ends_at,
     latitude: row.latitude,
     longitude: row.longitude,
+    tags,
+    distanceMiles: distanceMiles === null ? null : Math.round(distanceMiles * 10) / 10,
+    // Events hosted by a group show the group's name, otherwise the person who made it
+    host: row.group_id
+        ? { type: 'group', name: row.group_name }
+        : { type: 'user', name: row.creator_display_name || row.creator_username, username: row.creator_username },
+    isMine: row.creator_id === viewerId,
+    // ?v= changes when the image is replaced, so browsers do not show an old cached copy
+    imageUrl: row.image_updated_at
+        ? `/api/events/${row.id}/image?v=${new Date(row.image_updated_at).getTime()}`
+        : null,
     goingCount: row.going_count,
     iAmGoing: row.i_am_going
+});
+
+// Limits for creating an event
+const MAX_EVENT_TAGS = 5;
+const MAX_EVENT_DESCRIPTION = 2000;
+const MAX_NEWCOMER_TIP = 300;
+
+// Images: the page shrinks them before uploading, this is only a safety limit
+const MAX_EVENT_IMAGE_BYTES = 2 * 1024 * 1024;
+
+// Tags are lowercase, 1 to 25 characters: letters, numbers, spaces, & ' and -
+// Returns the cleaned up tag, or null if it is not allowed
+const normalizeTag = (tag) => {
+    if (typeof tag !== 'string') return null;
+    const cleaned = tag.trim().toLowerCase().replace(/^#/, '').replace(/\s+/g, ' ');
+    return /^[a-z0-9][a-z0-9 &'-]{0,24}$/.test(cleaned) ? cleaned : null;
+};
+
+// Suggested tags on the create page, taken from the profile lists so events line up with what Hokies like
+const SUGGESTED_EVENT_TAGS = [...PROFILE_OPTIONS.interests, ...PROFILE_OPTIONS.wellnessPreferences]
+    .map(normalizeTag).filter(Boolean);
+
+// Groups the logged in user can host events for
+// Only group admins can post on behalf of a group (the groups feature will manage who is an admin)
+const findHostableGroups = async (userId) => {
+    const result = await pool.query(
+        `SELECT groups.id, groups.name FROM groups
+         JOIN group_members ON group_members.group_id = groups.id
+         WHERE group_members.user_id = $1 AND group_members.role = 'admin'
+         ORDER BY groups.name`,
+        [userId]
+    );
+    return result.rows;
+};
+
+// Get the tags for a list of event ids, as a Map of event id -> list of tags
+const findEventTags = async (eventIds) => {
+    if (eventIds.length === 0) return new Map();
+    const placeholders = eventIds.map((_, index) => `$${index + 1}`).join(', ');
+    const result = await pool.query(
+        `SELECT event_id, tag FROM event_tags WHERE event_id IN (${placeholders}) ORDER BY tag`,
+        eventIds
+    );
+    return groupByUser(result.rows.map((row) => ({ user_id: row.event_id, tag: row.tag })), 'tag');
+};
+
+// The logged in user's saved location, used to show how far away each event is
+const findViewerLocation = async (userId) => {
+    const result = await pool.query('SELECT latitude, longitude FROM profiles WHERE user_id = $1', [userId]);
+    const row = result.rows[0];
+    return row && row.latitude !== null ? { latitude: row.latitude, longitude: row.longitude } : null;
+};
+
+const eventDistance = (viewerLocation, row) => (viewerLocation && row.latitude !== null)
+    ? distanceInMiles(viewerLocation.latitude, viewerLocation.longitude, row.latitude, row.longitude)
+    : null;
+
+// Choices for the Events and Create event pages
+app.get('/api/event-options', requireAuth, async (req, res) => {
+    try {
+        const popularResult = await pool.query(
+            `SELECT tag, COUNT(*)::int AS count FROM event_tags GROUP BY tag ORDER BY count DESC, tag LIMIT 20`
+        );
+        return res.status(200).json({
+            categories: PROFILE_OPTIONS.interests,
+            suggestedTags: SUGGESTED_EVENT_TAGS,
+            popularTags: popularResult.rows.map((row) => row.tag),
+            hostableGroups: await findHostableGroups(req.userId),
+            maxTags: MAX_EVENT_TAGS
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
 });
 
 const countGoing = async (eventId) => {
@@ -867,11 +980,56 @@ const countGoing = async (eventId) => {
     return result.rows[0].count;
 };
 
-// List all events, soonest first
+// List events
+// Optional filters: ?when=upcoming|week|past (default upcoming) &q=<search> &category=<name>
+//                   &tag=<tag> &maxDistance=<miles from the user's profile location>
 app.get('/api/events', requireAuth, async (req, res) => {
+    const when = ['upcoming', 'week', 'past'].includes(req.query.when) ? req.query.when : 'upcoming';
+    const search = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
+    const category = PROFILE_OPTIONS.interests.includes(req.query.category) ? req.query.category : null;
+    const tag = req.query.tag ? normalizeTag(req.query.tag) : null;
+    const maxDistance = Number(req.query.maxDistance) > 0 ? Number(req.query.maxDistance) : null;
+
+    // Build the WHERE clause from whichever filters were given, $1 is the user id
+    const conditions = [];
+    const params = [req.userId];
+    const addParam = (value) => {
+        params.push(value);
+        return `$${params.length}`;
+    };
+
+    // An event counts as upcoming until it ends (or until it starts, if it has no end time)
+    if (when === 'upcoming') conditions.push('COALESCE(events.ends_at, events.starts_at) >= NOW()');
+    if (when === 'past') conditions.push('COALESCE(events.ends_at, events.starts_at) < NOW()');
+    if (when === 'week') {
+        conditions.push(`COALESCE(events.ends_at, events.starts_at) >= NOW()`);
+        conditions.push(`events.starts_at <= ${addParam(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))}`);
+    }
+    if (search) {
+        const pattern = addParam(`%${search}%`);
+        conditions.push(`(events.title ILIKE ${pattern} OR events.description ILIKE ${pattern} OR events.location ILIKE ${pattern})`);
+    }
+    if (category) conditions.push(`events.category = ${addParam(category)}`);
+    if (tag) {
+        conditions.push(`events.id IN (SELECT event_id FROM event_tags WHERE tag = ${addParam(tag)})`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    // Past events show the most recent first, the rest show the soonest first
+    const order = when === 'past' ? 'DESC' : 'ASC';
+
     try {
-        const result = await pool.query(`${EVENT_SELECT} ORDER BY events.starts_at`, [req.userId]);
-        return res.status(200).json({events: result.rows.map(formatEvent)});
+        const result = await pool.query(`${EVENT_SELECT} ${where} ORDER BY events.starts_at ${order}`, params);
+        const viewerLocation = await findViewerLocation(req.userId);
+        const tagsByEvent = await findEventTags(result.rows.map((row) => row.id));
+
+        const events = [];
+        for (const row of result.rows) {
+            const distance = eventDistance(viewerLocation, row);
+            if (maxDistance !== null && (distance === null || distance > maxDistance)) continue;
+            events.push(formatEvent(row, req.userId, tagsByEvent.get(row.id) || [], distance));
+        }
+        return res.status(200).json({ events, viewerHasLocation: viewerLocation !== null });
     } catch (error) {
         return res.status(500).json({
             message: 'Internal Server Error'
@@ -890,7 +1048,10 @@ app.get('/api/events/:id', requireAuth, async (req, res) => {
         if (result.rows.length === 0) {
             return res.status(404).json({message: 'Event Not Found'});
         }
-        return res.status(200).json({event: formatEvent(result.rows[0])});
+        const row = result.rows[0];
+        const tagsByEvent = await findEventTags([eventId]);
+        const distance = eventDistance(await findViewerLocation(req.userId), row);
+        return res.status(200).json({event: formatEvent(row, req.userId, tagsByEvent.get(eventId) || [], distance)});
     } catch (error) {
         return res.status(500).json({
             message: 'Internal Server Error'
@@ -898,35 +1059,186 @@ app.get('/api/events/:id', requireAuth, async (req, res) => {
     }
 });
 
-// Create an event, the logged in user is the creator
-// Body: {title, startsAt, category, location, description, newcomerTip}
-app.post('/api/events', requireAuth, async (req, res) => {
-    const {title, startsAt, category, location, description, newcomerTip} = req.body;
-
-    if (!title || typeof title !== 'string' || title.length > 150) {
-        return res.status(400).json({message: 'Title is required and must be 150 characters or fewer'});
+// Returns an error message if the new event is invalid, otherwise null
+const validateEvent = ({title, startsAt, endsAt, category, location, latitude, longitude, description, newcomerTip, tags}) => {
+    if (!title || typeof title !== 'string' || title.trim().length === 0 || title.length > 150) {
+        return 'Title is required and must be 150 characters or fewer';
     }
-    if (!startsAt || isNaN(new Date(startsAt).getTime())) {
-        return res.status(400).json({message: 'A valid start time is required'});
+    const start = new Date(startsAt);
+    if (!startsAt || isNaN(start.getTime())) {
+        return 'A valid start time is required';
+    }
+    if (start < new Date()) {
+        return 'Start time must be in the future';
+    }
+    if (endsAt && (isNaN(new Date(endsAt).getTime()) || new Date(endsAt) < start)) {
+        return 'End time must be after the start time';
     }
     // Event categories use the same list as profile interests so filters and matching line up
-    if (category && !PROFILE_OPTIONS.interests.includes(category)) {
-        return res.status(400).json({message: 'Invalid Category'});
+    if (!PROFILE_OPTIONS.interests.includes(category)) {
+        return 'Please pick a category';
     }
+    if (!location || typeof location !== 'string' || location.trim().length === 0 || location.length > 255) {
+        return 'Location name is required and must be 255 characters or fewer';
+    }
+    if (typeof latitude !== 'number' || typeof longitude !== 'number' ||
+        Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+        return 'Please place the event on the map';
+    }
+    if (!description || typeof description !== 'string' || description.trim().length === 0 ||
+        description.length > MAX_EVENT_DESCRIPTION) {
+        return `Description is required and must be ${MAX_EVENT_DESCRIPTION} characters or fewer`;
+    }
+    if (newcomerTip && (typeof newcomerTip !== 'string' || newcomerTip.length > MAX_NEWCOMER_TIP)) {
+        return `Newcomer tip must be ${MAX_NEWCOMER_TIP} characters or fewer`;
+    }
+    if (tags !== undefined && (!Array.isArray(tags) || tags.length > MAX_EVENT_TAGS || !tags.every(normalizeTag))) {
+        return `Up to ${MAX_EVENT_TAGS} tags, each 1 to 25 letters, numbers or spaces`;
+    }
+    return null;
+};
 
+// Create an event, the logged in user is the creator
+// Body: {title, startsAt, endsAt, category, location, latitude, longitude, description, newcomerTip, tags, groupId}
+// groupId is optional, to host on behalf of a group the user is an admin of
+// The image is uploaded afterwards with PUT /api/events/:id/image
+app.post('/api/events', requireAuth, async (req, res) => {
+    const validationError = validateEvent(req.body);
+    if (validationError) {
+        return res.status(400).json({message: validationError});
+    }
+    const {title, startsAt, endsAt, category, location, latitude, longitude, description, newcomerTip, groupId} = req.body;
+    const tags = [...new Set((req.body.tags || []).map(normalizeTag))];
+
+    const client = await pool.connect();
+    try {
+        if (groupId) {
+            const hostable = await findHostableGroups(req.userId);
+            if (!hostable.some((group) => group.id === groupId)) {
+                return res.status(403).json({message: 'You can only host events for groups you are an admin of'});
+            }
+        }
+
+        // The event and its tags are saved together
+        await client.query('BEGIN');
+        const result = await client.query(
+            `INSERT INTO events (title, starts_at, ends_at, category, location, latitude, longitude,
+                                 description, newcomer_tip, creator_id, group_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+            [title.trim(), new Date(startsAt), endsAt ? new Date(endsAt) : null, category, location.trim(),
+             latitude, longitude, description.trim(), newcomerTip ? newcomerTip.trim() : null,
+             req.userId, groupId || null]
+        );
+        const eventId = result.rows[0].id;
+        for (const tag of tags) {
+            await client.query('INSERT INTO event_tags (event_id, tag) VALUES ($1, $2)', [eventId, tag]);
+        }
+        await client.query('COMMIT');
+        return res.status(201).json({message: 'Event Created', id: eventId});
+    } catch (error) {
+        await client.query('ROLLBACK');
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    } finally {
+        client.release();
+    }
+});
+
+// Delete an event, only the person who created it can
+app.delete('/api/events/:id', requireAuth, async (req, res) => {
+    const eventId = Number(req.params.id);
+    if (!Number.isInteger(eventId)) {
+        return res.status(404).json({message: 'Event Not Found'});
+    }
     try {
         const result = await pool.query(
-            `INSERT INTO events (title, starts_at, category, location, description, newcomer_tip, creator_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-            [title, new Date(startsAt), category || null, location || null,
-             description || null, newcomerTip || null, req.userId]
+            'DELETE FROM events WHERE id = $1 AND creator_id = $2',
+            [eventId, req.userId]
         );
-        return res.status(201).json({message: 'Event Created', id: result.rows[0].id});
+        if (result.rowCount === 0) {
+            return res.status(404).json({message: 'Event Not Found'});
+        }
+        return res.status(200).json({message: 'Event Deleted'});
     } catch (error) {
         return res.status(500).json({
             message: 'Internal Server Error'
         });
     }
+});
+
+// Checks the first bytes of the file, so a renamed file cannot pretend to be an image
+const detectImageType = (buffer) => {
+    if (buffer.length > 3 && buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) return 'image/jpeg';
+    if (buffer.length > 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]))) return 'image/png';
+    if (buffer.length > 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+    return null;
+};
+
+// Upload or replace an event's image, only the person who created the event can
+// The body is the image file itself (Content-Type image/jpeg, image/png or image/webp)
+app.put('/api/events/:id/image',
+    requireAuth,
+    express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: MAX_EVENT_IMAGE_BYTES }),
+    async (req, res) => {
+        const eventId = Number(req.params.id);
+        if (!Number.isInteger(eventId)) {
+            return res.status(404).json({message: 'Event Not Found'});
+        }
+        const contentType = Buffer.isBuffer(req.body) ? detectImageType(req.body) : null;
+        if (!contentType) {
+            return res.status(400).json({message: 'Image must be a JPEG, PNG or WebP file'});
+        }
+
+        try {
+            const owner = await pool.query('SELECT 1 FROM events WHERE id = $1 AND creator_id = $2', [eventId, req.userId]);
+            if (owner.rows.length === 0) {
+                return res.status(404).json({message: 'Event Not Found'});
+            }
+            await pool.query(
+                `INSERT INTO event_images (event_id, content_type, data, updated_at) VALUES ($1, $2, $3, NOW())
+                 ON CONFLICT (event_id) DO UPDATE SET
+                    content_type = EXCLUDED.content_type, data = EXCLUDED.data, updated_at = NOW()`,
+                [eventId, contentType, req.body]
+            );
+            return res.status(200).json({message: 'Image Saved'});
+        } catch (error) {
+            return res.status(500).json({
+                message: 'Internal Server Error'
+            });
+        }
+    }
+);
+
+// Send an event's image
+// Not behind requireAuth because <img> tags cannot send the login token, event images are not private
+app.get('/api/events/:id/image', async (req, res) => {
+    const eventId = Number(req.params.id);
+    if (!Number.isInteger(eventId)) {
+        return res.status(404).json({message: 'Image Not Found'});
+    }
+    try {
+        const result = await pool.query('SELECT content_type, data FROM event_images WHERE event_id = $1', [eventId]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({message: 'Image Not Found'});
+        }
+        res.set('Content-Type', result.rows[0].content_type);
+        // The URL includes ?v=<last updated> so it is safe to cache for a long time
+        res.set('Cache-Control', 'public, max-age=604800');
+        return res.status(200).send(result.rows[0].data);
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// Errors from express.raw above (image too large) come back as JSON like everything else
+app.use('/api/events/:id/image', (error, req, res, next) => {
+    if (error.type === 'entity.too.large') {
+        return res.status(413).json({message: 'Image must be 2 MB or smaller'});
+    }
+    next(error);
 });
 
 // RSVP "going" to an event

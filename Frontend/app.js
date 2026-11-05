@@ -39,8 +39,8 @@ for (const button of filterButtons) {
   });
 }
 
-// Load the events, then show them all
-loadEvents().then((list) => {
+// Load this week's events, then show them all (the Events tab has everything else)
+loadEvents({ when: 'week' }).then((list) => {
   events = list;
   showEvents('All');
 });

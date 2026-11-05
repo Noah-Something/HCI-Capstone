@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HokieConnect – Create event</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=DM+Sans:wght@400;700&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="home.html" class="logo">HokieConnect</a>
+    <div class="nav-links">
+      <a href="home.html">Discover</a>
+      <a href="events.html" class="active">Events</a>
+      <a href="hokies.html">Hokies</a>
+      <a href="groups.html">Groups</a>
+      <a href="messages.html">Messages</a>
+      <a href="profile.html">Profile</a>
+    </div>
+  </nav>
+
+  <div class="page profile-page">
+    <a href="events.html"><b>← Back to Events</b></a>
+    <h1 style="margin-top:12px">Create an event</h1>
+
+    <form id="eventForm">
+
+      <!-- The basics -->
+      <div class="card profile-section">
+        <h2>Details</h2>
+
+        <label for="title">Event name</label>
+        <input id="title" class="input" type="text" maxlength="150" placeholder="Saturday Morning 5K on the Mall" required>
+
+        <label for="category">Category</label>
+        <select id="category" class="input" required>
+          <option value="">Choose a category</option>
+        </select>
+
+        <label>Host</label>
+        <div class="host-choice">
+          <label><input type="radio" name="host" value="me" checked> Myself</label>
+          <label><input type="radio" name="host" value="group" id="hostGroupRadio"> A group I run</label>
+        </div>
+        <select id="groupSelect" class="input" hidden></select>
+        <p id="groupNote" class="gray" hidden>You are not an admin of any groups yet. Groups are coming soon.</p>
+
+        <div class="time-row">
+          <div>
+            <label for="startsAt">Starts</label>
+            <input id="startsAt" class="input" type="datetime-local" required>
+          </div>
+          <div>
+            <label for="endsAt">Ends (optional)</label>
+            <input id="endsAt" class="input" type="datetime-local">
+          </div>
+        </div>
+
+        <label for="description">Description</label>
+        <textarea id="description" class="input" rows="4" maxlength="2000" required
+                  placeholder="What will you do? Who is it for? What should people bring?"></textarea>
+
+        <label for="newcomerTip">Tip for first-timers (optional)</label>
+        <input id="newcomerTip" class="input" type="text" maxlength="300" placeholder="Look for the maroon flag at the start.">
+      </div>
+
+      <!-- Where -->
+      <div class="card profile-section">
+        <h2>Location</h2>
+
+        <label for="location">Place name</label>
+        <input id="location" class="input" type="text" maxlength="255" placeholder="National Mall, by the Washington Monument" required>
+
+        <p class="gray">Click the map to drop a pin where the event happens. You can drag the pin to adjust it.</p>
+        <div class="location-actions" style="margin-bottom:10px">
+          <button type="button" id="useLocationButton" class="btn">Use my current location</button>
+        </div>
+        <div id="pickerMap" class="picker-map"></div>
+        <p id="coordinates" class="gray">No pin placed yet.</p>
+      </div>
+
+      <!-- Tags -->
+      <div class="card profile-section">
+        <h2>Tags</h2>
+        <p class="gray">Help Hokies find your event. Type a tag and press Enter, or click a suggestion. Up to <span id="maxTags">5</span>.</p>
+        <div id="selectedTags" class="chips" style="margin-bottom:10px"></div>
+        <input id="tagInput" class="input" type="text" maxlength="25" placeholder="trail running">
+        <div id="tagSuggestionChips" class="filters"></div>
+      </div>
+
+      <!-- Image -->
+      <div class="card profile-section">
+        <h2>Image (optional)</h2>
+        <p class="gray">A photo or flyer for your event. JPEG, PNG or WebP.</p>
+        <input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp">
+        <div id="imagePreviewBox" hidden>
+          <img id="imagePreview" class="image-preview" alt="Preview of the event image">
+          <button type="button" id="removeImageButton" class="btn">Remove image</button>
+        </div>
+      </div>
+
+      <button type="submit" id="createButton" class="btn btn-maroon">Create event</button>
+      <p id="createStatus"></p>
+    </form>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="events.js"></script>
+  <script src="create-event.js"></script>
+</body>
+</html>

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HokieConnect – Event</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=DM+Sans:wght@400;700&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -12,7 +13,8 @@
   <nav class="navbar">
     <a href="home.html" class="logo">HokieConnect</a>
     <div class="nav-links">
-      <a href="home.html" class="active">Discover</a>
+      <a href="home.html">Discover</a>
+      <a href="events.html" class="active">Events</a>
       <a href="hokies.html">Hokies</a>
       <a href="groups.html">Groups</a>
       <a href="messages.html">Messages</a>
@@ -21,22 +23,33 @@
   </nav>
 
   <div class="page">
-    <a href="home.html"><b>← Back to Discover</b></a>
+    <a href="events.html"><b>← Back to Events</b></a>
 
     <div class="card event-detail">
+      <img id="eventImage" class="event-detail-image" alt="" hidden>
       <div class="event-top" id="eventCategory"></div>
       <div class="event-info">
         <h1 id="eventTitle">Loading…</h1>
         <p class="gray" id="eventWhen"></p>
-        <p id="eventDescription"></p>
+        <p class="gray event-host" id="eventHost"></p>
+        <div id="eventTags" class="chips" style="margin-bottom:10px"></div>
+        <p id="eventDescription" class="event-description"></p>
         <p class="tip" id="tipBox"><b>First time?</b> <span id="eventTip"></span></p>
         <p class="going" id="goingCount"></p>
         <button id="rsvpButton" class="btn btn-maroon">RSVP · I'm going</button>
         <p id="rsvpStatus" style="color:red"></p>
+
+        <div id="eventMapBox" hidden>
+          <div id="eventMap" class="event-detail-map"></div>
+          <a id="directionsLink" target="_blank" rel="noopener"><b>Get directions →</b></a>
+        </div>
+
+        <button id="deleteButton" class="btn delete-button" hidden>Delete event</button>
       </div>
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="events.js"></script>
   <script src="event.js"></script>
 </body>

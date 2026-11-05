@@ -25,8 +25,47 @@ async function showEventPage() {
   document.getElementById('eventCategory').textContent = selectedEvent.category;
   document.getElementById('eventTitle').textContent = selectedEvent.title;
   document.getElementById('eventWhen').textContent =
-    formatLongTime(selectedEvent.startsAt) + ' · ' + selectedEvent.location;
+    [formatLongTime(selectedEvent.startsAt), selectedEvent.location, formatDistance(selectedEvent.distanceMiles)]
+      .filter(Boolean).join(' · ');
   document.getElementById('eventDescription').textContent = selectedEvent.description;
+
+  // Host, tags and image (sample events on Live Server do not have these)
+  if (selectedEvent.host) {
+    document.getElementById('eventHost').textContent = 'Hosted by ' + selectedEvent.host.name +
+      (selectedEvent.host.type === 'group' ? ' (group)' : '') + (selectedEvent.isMine ? ' · You' : '');
+  }
+  document.getElementById('eventTags').innerHTML = (selectedEvent.tags || [])
+    .map((tag) => `<span class="chip">#${escapeEventHtml(tag)}</span>`).join('');
+  if (selectedEvent.imageUrl) {
+    const image = document.getElementById('eventImage');
+    image.src = selectedEvent.imageUrl;
+    image.alt = selectedEvent.title;
+    image.hidden = false;
+  }
+
+  // Map pin and a directions link that opens in the phone's or computer's map app
+  if (selectedEvent.latitude !== null && selectedEvent.latitude !== undefined) {
+    document.getElementById('eventMapBox').hidden = false;
+    const point = [selectedEvent.latitude, selectedEvent.longitude];
+    const map = makeMap('eventMap', point, 15);
+    L.marker(point).addTo(map);
+    document.getElementById('directionsLink').href =
+      `https://www.google.com/maps/dir/?api=1&destination=${selectedEvent.latitude},${selectedEvent.longitude}`;
+  }
+
+  // Only the person who created the event can delete it
+  if (selectedEvent.isMine) {
+    const deleteButton = document.getElementById('deleteButton');
+    deleteButton.hidden = false;
+    deleteButton.addEventListener('click', async () => {
+      if (!confirm('Delete this event? Everyone who RSVP\'d will lose it too.')) return;
+      if (await deleteEvent(selectedEvent.id)) {
+        window.location.href = 'events.html';
+      } else {
+        document.getElementById('rsvpStatus').textContent = 'Could not delete the event. Please try again.';
+      }
+    });
+  }
 
   if (selectedEvent.newcomerTip) {
     document.getElementById('eventTip').textContent = selectedEvent.newcomerTip;

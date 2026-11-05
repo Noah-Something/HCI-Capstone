@@ -1,0 +1,110 @@
+// ===== HokieConnect – Events tab code =====
+// Uses loadEvents, loadEventOptions, makeMap, escapeEventHtml, formatShortTime and formatDistance from events.js
+
+if (!sessionStorage.getItem('authToken')) {
+  window.location.href = 'index.html';
+}
+
+const eventResults = document.getElementById('eventResults');
+const eventResultCount = document.getElementById('eventResultCount');
+
+// One map for the page, its pins are replaced every time the filters change
+const eventsMap = makeMap('eventsMap');
+const pinLayer = L.layerGroup().addTo(eventsMap);
+
+function makeEventResultCard(event) {
+  const details = [formatShortTime(event.startsAt), escapeEventHtml(event.location), formatDistance(event.distanceMiles)]
+    .filter(Boolean).join(' · ');
+  const tags = (event.tags || []).map((tag) => `<span class="chip">#${escapeEventHtml(tag)}</span>`).join('');
+  const host = event.host
+    ? `Hosted by ${escapeEventHtml(event.host.name)}${event.host.type === 'group' ? ' (group)' : ''}${event.isMine ? ' · You' : ''}`
+    : '';
+
+  return `
+    <a href="event.html?id=${event.id}" class="card event-card">
+      ${event.imageUrl
+        ? `<img class="event-card-image" src="${event.imageUrl}" alt="" loading="lazy">`
+        : ''}
+      <div class="event-top">${escapeEventHtml(event.category)}</div>
+      <div class="event-info">
+        <h3 style="margin:0 0 6px">${escapeEventHtml(event.title)}</h3>
+        <p class="gray" style="margin:0 0 6px">${details}</p>
+        ${host ? `<p class="gray event-host">${host}</p>` : ''}
+        ${tags ? `<div class="chips" style="margin-bottom:8px">${tags}</div>` : ''}
+        <span class="going">${event.goingCount} Hokies going${event.iAmGoing ? ' · including you' : ''}</span>
+      </div>
+    </a>`;
+}
+
+// Put a pin on the map for every event that has coordinates, and zoom to fit them
+function showEventPins(events) {
+  pinLayer.clearLayers();
+  const points = [];
+  for (const event of events) {
+    if (event.latitude === null || event.latitude === undefined) continue;
+    const point = [event.latitude, event.longitude];
+    points.push(point);
+    L.marker(point)
+      .bindPopup(`<b><a href="event.html?id=${event.id}">${escapeEventHtml(event.title)}</a></b><br>
+                  ${formatShortTime(event.startsAt)} · ${escapeEventHtml(event.location)}`)
+      .addTo(pinLayer);
+  }
+  if (points.length === 1) {
+    eventsMap.setView(points[0], 14);
+  } else if (points.length > 1) {
+    eventsMap.fitBounds(points, { padding: [30, 30], maxZoom: 14 });
+  }
+}
+
+async function showEvents() {
+  const filters = {
+    when: document.getElementById('whenFilter').value,
+    q: document.getElementById('searchFilter').value.trim(),
+    category: document.getElementById('categoryFilter').value,
+    tag: document.getElementById('tagFilter').value.trim(),
+    maxDistance: document.getElementById('distanceFilter').value
+  };
+
+  eventResultCount.textContent = 'Finding events ...';
+  const events = await loadEvents(filters);
+
+  // Events only have a distance if the user saved a location on their profile
+  const anyDistance = events.some((event) => event.distanceMiles !== null && event.distanceMiles !== undefined);
+  document.getElementById('distanceTip').hidden = anyDistance || events.length === 0;
+
+  eventResultCount.textContent = events.length === 1 ? '1 event' : `${events.length} events`;
+  eventResults.innerHTML = events.length
+    ? events.map(makeEventResultCard).join('')
+    : '<p class="gray">No events match these filters. Try widening your search, or <a href="create-event.html"><b>create one</b></a>!</p>';
+  showEventPins(events);
+}
+
+async function setUpFilters() {
+  const options = await loadEventOptions();
+  for (const category of options.categories) {
+    const option = document.createElement('option');
+    option.value = category;
+    option.textContent = category;
+    document.getElementById('categoryFilter').appendChild(option);
+  }
+  // Tags people already use come first, then the suggested ones
+  for (const tag of new Set([...options.popularTags, ...options.suggestedTags])) {
+    const option = document.createElement('option');
+    option.value = tag;
+    document.getElementById('tagSuggestions').appendChild(option);
+  }
+}
+
+for (const id of ['whenFilter', 'categoryFilter', 'distanceFilter']) {
+  document.getElementById(id).addEventListener('change', showEvents);
+}
+// Wait until the user stops typing before searching
+let typingTimer;
+for (const id of ['searchFilter', 'tagFilter']) {
+  document.getElementById(id).addEventListener('input', () => {
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(showEvents, 400);
+  });
+}
+
+setUpFilters().then(showEvents);
