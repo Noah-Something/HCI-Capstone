@@ -235,3 +235,15 @@ textarea.input { font-family: inherit; resize: vertical; }
 @media (max-width: 500px) { .event-filters, .hokie-filters { grid-template-columns: 1fr; } }
 .events-header { margin-bottom: 8px; }
 .events-header > h2 { margin: 0; }
+
+/* Event page: when, where and who is going */
+.event-when { font-weight: bold; margin: 0 0 4px; }
+.event-where { color: var(--gray); margin: 0 0 8px; }
+.attendees { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px; }
+.attendees h2 { font-size: 20px; }
+.attendee-list { list-style: none; margin: 0; padding: 0; max-height: 360px; overflow-y: auto; }
+.attendee { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.attendee:last-child { border-bottom: none; }
+.attendee-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--maroon-light); color: var(--maroon); display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+.attendee-name { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.attendee-message { padding: 6px 12px; font-size: 14px; }

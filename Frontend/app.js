@@ -13,7 +13,7 @@ function makeEventCard(event) {
       <div class="event-top">${escapeHtml(event.category)}</div>
       <div class="event-info">
         <h3 style="margin:0 0 6px">${escapeHtml(event.title)}</h3>
-        <p class="gray" style="margin:0 0 8px">${formatShortTime(event.startsAt)} · ${escapeHtml(event.location)}</p>
+        <p class="gray" style="margin:0 0 8px">${formatTimeRange(event.startsAt, event.endsAt)} · ${escapeHtml(event.location)}</p>
         <span class="going">${event.goingCount} Hokies going</span>
       </div>
     </a>`;

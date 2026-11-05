@@ -1,5 +1,5 @@
 // ===== HokieConnect – Events tab code =====
-// Uses loadEvents, loadEventOptions, createMap, escapeEventHtml, formatShortTime and formatDistance from events.js
+// Uses loadEvents, loadEventOptions, createMap, escapeEventHtml, formatTimeRange and formatDistance from events.js
 
 if (!sessionStorage.getItem('authToken')) {
   window.location.href = 'index.html';
@@ -12,7 +12,7 @@ const eventResultCount = document.getElementById('eventResultCount');
 const eventsMapReady = createMap('eventsMap');
 
 function makeEventResultCard(event) {
-  const details = [formatShortTime(event.startsAt), escapeEventHtml(event.location), formatDistance(event.distanceMiles)]
+  const details = [formatTimeRange(event.startsAt, event.endsAt), escapeEventHtml(event.location), formatDistance(event.distanceMiles)]
     .filter(Boolean).join(' · ');
   const tags = (event.tags || []).map((tag) => `<span class="chip">#${escapeEventHtml(tag)}</span>`).join('');
   const host = event.host
@@ -44,7 +44,7 @@ async function showEventPins(events) {
       .map((event) => ({
         point: [event.latitude, event.longitude],
         popupHtml: `<b><a href="event.html?id=${event.id}">${escapeEventHtml(event.title)}</a></b><br>
-                    ${formatShortTime(event.startsAt)} · ${escapeEventHtml(event.location)}`
+                    ${formatTimeRange(event.startsAt, event.endsAt)} · ${escapeEventHtml(event.location)}`
       })));
   } catch (error) {
     document.getElementById('eventsMap').hidden = true;

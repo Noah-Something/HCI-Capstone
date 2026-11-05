@@ -29,7 +29,8 @@
       <div class="event-top" id="eventCategory"></div>
       <div class="event-info">
         <h1 id="eventTitle">Loading…</h1>
-        <p class="gray" id="eventWhen"></p>
+        <p class="event-when"><span aria-hidden="true">🗓</span> <span id="eventWhen"></span></p>
+        <p class="event-where"><span aria-hidden="true">📍</span> <span id="eventWhere"></span></p>
         <p class="gray event-host" id="eventHost"></p>
         <div id="eventTags" class="chips" style="margin-bottom:10px"></div>
         <p id="eventDescription" class="event-description"></p>
@@ -37,6 +38,12 @@
         <p class="going" id="goingCount"></p>
         <button id="rsvpButton" class="btn btn-maroon">RSVP · I'm going</button>
         <p id="rsvpStatus" style="color:red"></p>
+
+        <!-- event.js fills this in from /api/events/:id/attendees -->
+        <div id="attendeesBox" class="attendees" hidden>
+          <h2>Who's going</h2>
+          <ul id="attendeeList" class="attendee-list"></ul>
+        </div>
 
         <div id="eventMapBox" hidden>
           <div id="eventMap" class="event-detail-map"></div>

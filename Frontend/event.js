@@ -1,5 +1,5 @@
 // ===== HokieConnect – event details page code =====
-// Uses loadEvent, setRsvp and formatLongTime from events.js
+// Uses loadEvent, setRsvp, loadAttendees and formatTimeRange from events.js
 
 // If the user is not logged in, send them back to the login page
 if (!sessionStorage.getItem('authToken')) {
@@ -25,8 +25,9 @@ async function showEventPage() {
   document.getElementById('eventCategory').textContent = selectedEvent.category;
   document.getElementById('eventTitle').textContent = selectedEvent.title;
   document.getElementById('eventWhen').textContent =
-    [formatLongTime(selectedEvent.startsAt), selectedEvent.location, formatDistance(selectedEvent.distanceMiles)]
-      .filter(Boolean).join(' · ');
+    formatTimeRange(selectedEvent.startsAt, selectedEvent.endsAt, true);
+  document.getElementById('eventWhere').textContent =
+    [selectedEvent.location, formatDistance(selectedEvent.distanceMiles)].filter(Boolean).join(' · ');
   document.getElementById('eventDescription').textContent = selectedEvent.description;
 
   // Host, tags and image (sample events on Live Server do not have these)
@@ -114,9 +115,38 @@ async function showEventPage() {
 
     rsvpButton.disabled = false;
     updateRsvp();
+    showAttendees(selectedEvent.id);
   });
 
   updateRsvp();
+  showAttendees(selectedEvent.id);
+}
+
+// List everyone going, with a link to message each of them (not yourself)
+async function showAttendees(id) {
+  const attendees = await loadAttendees(id);
+  const box = document.getElementById('attendeesBox');
+  if (attendees === null) {
+    // Live Server has no attendee data
+    box.hidden = true;
+    return;
+  }
+
+  box.hidden = false;
+  const list = document.getElementById('attendeeList');
+  if (attendees.length === 0) {
+    list.innerHTML = '<li class="gray">No one yet. Be the first to RSVP!</li>';
+    return;
+  }
+  list.innerHTML = attendees.map((person) => `
+    <li class="attendee">
+      <span class="attendee-avatar" aria-hidden="true">${escapeEventHtml(person.displayName.charAt(0).toUpperCase())}</span>
+      <span class="attendee-name">
+        <span><b>${escapeEventHtml(person.displayName)}</b>${person.isMe ? ' <span class="gray">(you)</span>' : ''}</span>
+        <span class="gray">${person.gradYear ? `Class of ${person.gradYear}` : `@${escapeEventHtml(person.username)}`}</span>
+      </span>
+      ${person.isMe ? '' : `<a class="btn attendee-message" href="messages.html?user=${encodeURIComponent(person.username)}">Message</a>`}
+    </li>`).join('');
 }
 
 showEventPage();

@@ -205,7 +205,7 @@ function loadMapLibrary() {
 }
 
 // options: { center: [lat, lng], zoom, picker }
-// picker: true for the create page, so scrolling over the map zooms it instead of scrolling the page
+// picker: true for the create page, so clicking a shop or park drops the pin instead of opening Google's info box
 async function createMap(elementId, { center = DEFAULT_MAP_CENTER, zoom = 12, picker = false } = {}) {
   const library = await loadMapLibrary();
   return library === 'google'
@@ -219,8 +219,8 @@ function createGoogleMap(elementId, center, zoom, picker) {
     center: toLatLng(center),
     zoom,
     mapId: window.__hokieMapId,
-    // On lists, scrolling the page should not get stuck zooming the map
-    gestureHandling: picker ? 'greedy' : 'cooperative',
+    // The scroll wheel (or one finger on a phone) zooms and moves the map without holding Ctrl
+    gestureHandling: 'greedy',
     // Clicking a shop or park on the picker should drop the pin, not open Google's info box
     clickableIcons: !picker,
     streetViewControl: false,
@@ -343,15 +343,39 @@ async function setRsvp(id, going) {
   return { offline: false, ok: result.ok, goingCount: result.data.goingCount };
 }
 
-
-function formatShortTime(startsAt) {
-  return new Date(startsAt).toLocaleString('en-US', {
-    weekday: 'short', hour: 'numeric', minute: '2-digit'
-  });
+// Hokies going to an event: [{ username, displayName, gradYear, isMe }], or null on Live Server
+async function loadAttendees(id) {
+  const result = await apiRequest(`/api/events/${id}/attendees`);
+  if (result.offline || !result.ok) return null;
+  return result.data.attendees;
 }
 
-function formatLongTime(startsAt) {
-  return new Date(startsAt).toLocaleString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit'
+// When an event happens, with its start and end dates and times
+//   same day:      "Sat, Nov 7 · 8:00 AM – 10:00 AM"
+//   different day: "Sat, Nov 7, 8:00 PM – Sun, Nov 8, 1:00 AM"
+//   no end time:   "Sat, Nov 7 · 8:00 AM"
+// long: true spells out the day and month ("Saturday, November 7"), used on the event page
+function formatTimeRange(startsAt, endsAt, long = false) {
+  const start = new Date(startsAt);
+  const end = endsAt ? new Date(endsAt) : null;
+  const thisYear = new Date().getFullYear();
+
+  const dateText = (date) => date.toLocaleDateString('en-US', {
+    weekday: long ? 'long' : 'short',
+    month: long ? 'long' : 'short',
+    day: 'numeric',
+    // Only show the year when it is not this year
+    ...(date.getFullYear() !== thisYear && { year: 'numeric' })
   });
+  const timeText = (date) => date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+  if (!end) {
+    return `${dateText(start)} · ${timeText(start)}`;
+  }
+  if (start.toDateString() === end.toDateString()) {
+    return `${dateText(start)} · ${timeText(start)} – ${timeText(end)}`;
+  }
+  return `${dateText(start)}, ${timeText(start)} – ${dateText(end)}, ${timeText(end)}`;
 }
+
+

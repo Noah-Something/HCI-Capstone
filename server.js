@@ -1071,6 +1071,42 @@ app.get('/api/events/:id', requireAuth, async (req, res) => {
     }
 });
 
+// List the Hokies going to an event, the logged in user first, then in the order they RSVP'd
+// Only shows what is always public on a profile (name and class year)
+app.get('/api/events/:id/attendees', requireAuth, async (req, res) => {
+    const eventId = Number(req.params.id);
+    if (!Number.isInteger(eventId)) {
+        return res.status(404).json({message: 'Event Not Found'});
+    }
+    try {
+        const eventResult = await pool.query('SELECT 1 FROM events WHERE id = $1', [eventId]);
+        if (eventResult.rows.length === 0) {
+            return res.status(404).json({message: 'Event Not Found'});
+        }
+        const result = await pool.query(
+            `SELECT users.id, users.username, profiles.display_name, profiles.grad_year
+             FROM event_attendees
+             JOIN users ON users.id = event_attendees.user_id
+             LEFT JOIN profiles ON profiles.user_id = users.id
+             WHERE event_attendees.event_id = $1 AND event_attendees.status = 'going'
+             ORDER BY (users.id = $2) DESC, event_attendees.responded_at ASC`,
+            [eventId, req.userId]
+        );
+        return res.status(200).json({
+            attendees: result.rows.map((row) => ({
+                username: row.username,
+                displayName: row.display_name || row.username,
+                gradYear: row.grad_year || null,
+                isMe: row.id === req.userId
+            }))
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
 // Returns an error message if the new event is invalid, otherwise null
 const validateEvent = ({title, startsAt, endsAt, category, location, latitude, longitude, description, newcomerTip, tags}) => {
     if (!title || typeof title !== 'string' || title.trim().length === 0 || title.length > 150) {
