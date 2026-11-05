@@ -126,9 +126,11 @@ const initDatabase = async () => {
         -- Link table: short tags on an event (lowercase, see normalizeTag)
         CREATE TABLE IF NOT EXISTS event_tags (
             event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-            tag VARCHAR(25) NOT NULL,
+            tag VARCHAR(30) NOT NULL,
             PRIMARY KEY (event_id, tag)
         );
+        -- Tags used to be limited to 25 characters, too short for "mindfulness and relaxation"
+        ALTER TABLE event_tags ALTER COLUMN tag TYPE VARCHAR(30);
 
         -- One optional image per event, stored in the database because Render's disk is wiped on every deploy
         CREATE TABLE IF NOT EXISTS event_images (
@@ -905,12 +907,12 @@ const MAX_NEWCOMER_TIP = 300;
 // Images: the page shrinks them before uploading, this is only a safety limit
 const MAX_EVENT_IMAGE_BYTES = 2 * 1024 * 1024;
 
-// Tags are lowercase, 1 to 25 characters: letters, numbers, spaces, & ' and -
+// Tags are lowercase, 1 to 30 characters: letters, numbers, spaces, & ' and -
 // Returns the cleaned up tag, or null if it is not allowed
 const normalizeTag = (tag) => {
     if (typeof tag !== 'string') return null;
     const cleaned = tag.trim().toLowerCase().replace(/^#/, '').replace(/\s+/g, ' ');
-    return /^[a-z0-9][a-z0-9 &'-]{0,24}$/.test(cleaned) ? cleaned : null;
+    return /^[a-z0-9][a-z0-9 &'-]{0,29}$/.test(cleaned) ? cleaned : null;
 };
 
 // Suggested tags on the create page, taken from the profile lists so events line up with what Hokies like
@@ -984,6 +986,63 @@ app.get('/api/event-options', requireAuth, async (req, res) => {
     }
 });
 
+// ===== Event recommendations (Discover page) =====
+// Like the Hokie compatibility score, each part earns up to its weight in points, out of 100.
+// Matching what the user likes counts the most, then how close the event is, then how soon it is
+const RECOMMEND_WEIGHTS = {
+    interests: 40,
+    distance: 30,
+    soon: 20,
+    popular: 10
+};
+
+// Distance points halve every this many miles: 0 mi = full points, 5 mi = half
+const RECOMMEND_DISTANCE_HALF_LIFE_MILES = 5;
+
+// "How soon" points halve every this many days: today = full points, a week away = half
+const RECOMMEND_SOON_HALF_LIFE_DAYS = 7;
+
+// This many Hokies going earns the full popularity points
+const RECOMMEND_POPULAR_COUNT = 10;
+
+// The logged in user's interests and wellness preferences, as tags (lowercase) so they compare to event tags
+const findViewerLikes = async (userId) => {
+    const interests = (await pool.query('SELECT interest FROM user_interests WHERE user_id = $1', [userId]))
+        .rows.map((row) => row.interest);
+    const wellness = (await pool.query('SELECT preference FROM user_wellness_preferences WHERE user_id = $1', [userId]))
+        .rows.map((row) => row.preference);
+    return { interests, likedTags: new Set([...interests, ...wellness].map(normalizeTag).filter(Boolean)) };
+};
+
+// Scores one event for the viewer, returns { score, reasons } where reasons are short sentences for the page
+const recommendEvent = (event, viewerLikes) => {
+    const reasons = [];
+
+    // Interests: the category is one of theirs, or the tags match their interests or wellness preferences
+    const categoryMatch = viewerLikes.interests.includes(event.category);
+    const matchingTags = event.tags.filter((tag) => viewerLikes.likedTags.has(tag));
+    const interestScore = categoryMatch ? 1 : Math.min(1, matchingTags.length * 0.5);
+    if (categoryMatch) {
+        reasons.push(`Matches your interest in ${event.category}`);
+    } else if (matchingTags.length) {
+        reasons.push(`Tagged #${matchingTags[0]}, which you like`);
+    }
+
+    // Distance and popularity count toward the score, but are not reasons because the card already shows them
+    const distanceScore = event.distanceMiles === null
+        ? 0 : 0.5 ** (event.distanceMiles / RECOMMEND_DISTANCE_HALF_LIFE_MILES);
+
+    const daysAway = Math.max(0, (new Date(event.startsAt) - Date.now()) / (24 * 60 * 60 * 1000));
+    const soonScore = 0.5 ** (daysAway / RECOMMEND_SOON_HALF_LIFE_DAYS);
+    if (daysAway < 1) reasons.push('Happening soon');
+
+    const popularScore = Math.min(1, event.goingCount / RECOMMEND_POPULAR_COUNT);
+
+    const score = interestScore * RECOMMEND_WEIGHTS.interests + distanceScore * RECOMMEND_WEIGHTS.distance +
+        soonScore * RECOMMEND_WEIGHTS.soon + popularScore * RECOMMEND_WEIGHTS.popular;
+    return { score: Math.round(score), reasons: reasons.slice(0, 2) };
+};
+
 const countGoing = async (eventId) => {
     const result = await pool.query(
         `SELECT COUNT(*)::int AS count FROM event_attendees WHERE event_id = $1 AND status = 'going'`,
@@ -995,7 +1054,10 @@ const countGoing = async (eventId) => {
 // List events
 // Optional filters: ?when=upcoming|week|past (default upcoming) &q=<search> &category=<name>
 //                   &tag=<tag> &maxDistance=<miles from the user's profile location>
+//                   &sort=recommended (best matches for the user first, see recommendEvent) &limit=<count>
 app.get('/api/events', requireAuth, async (req, res) => {
+    const recommended = req.query.sort === 'recommended';
+    const limit = Number.isInteger(Number(req.query.limit)) && Number(req.query.limit) > 0 ? Number(req.query.limit) : null;
     const when = ['upcoming', 'week', 'past'].includes(req.query.when) ? req.query.when : 'upcoming';
     const search = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
     const category = PROFILE_OPTIONS.interests.includes(req.query.category) ? req.query.category : null;
@@ -1035,12 +1097,23 @@ app.get('/api/events', requireAuth, async (req, res) => {
         const viewerLocation = await findViewerLocation(req.userId);
         const tagsByEvent = await findEventTags(result.rows.map((row) => row.id));
 
-        const events = [];
+        let events = [];
         for (const row of result.rows) {
             const distance = eventDistance(viewerLocation, row);
             if (maxDistance !== null && (distance === null || distance > maxDistance)) continue;
             events.push(formatEvent(row, req.userId, tagsByEvent.get(row.id) || [], distance));
         }
+
+        if (recommended) {
+            const viewerLikes = await findViewerLikes(req.userId);
+            events = events
+                .map((event) => ({ ...event, recommendation: recommendEvent(event, viewerLikes) }))
+                // Best match first, sooner first when scores tie
+                .sort((a, b) => b.recommendation.score - a.recommendation.score ||
+                    new Date(a.startsAt) - new Date(b.startsAt));
+        }
+        if (limit !== null) events = events.slice(0, limit);
+
         return res.status(200).json({ events, viewerHasLocation: viewerLocation !== null });
     } catch (error) {
         return res.status(500).json({
@@ -1141,7 +1214,7 @@ const validateEvent = ({title, startsAt, endsAt, category, location, latitude, l
         return `Newcomer tip must be ${MAX_NEWCOMER_TIP} characters or fewer`;
     }
     if (tags !== undefined && (!Array.isArray(tags) || tags.length > MAX_EVENT_TAGS || !tags.every(normalizeTag))) {
-        return `Up to ${MAX_EVENT_TAGS} tags, each 1 to 25 letters, numbers or spaces`;
+        return `Up to ${MAX_EVENT_TAGS} tags, each 1 to 30 letters, numbers or spaces`;
     }
     return null;
 };

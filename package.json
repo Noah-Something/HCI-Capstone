@@ -1,7 +1,8 @@
 {
   "scripts": {
     "start": "node server.js",
-    "seed": "node scripts/seed-sample-profiles.js"
+    "seed": "node scripts/seed-sample-profiles.js",
+    "seed-events": "node scripts/seed-sample-events.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

@@ -4,44 +4,63 @@ if (!sessionStorage.getItem('authToken')) {
   window.location.href = 'index.html';
 }
 
-// Events come from the server (/api/events), or from SAMPLE_EVENTS on Live Server (see events.js)
+// ===== Recommended events =====
+// The server ranks upcoming events for this user (/api/events?sort=recommended, see recommendEvent in server.js)
+// or SAMPLE_EVENTS are used on Live Server (see events.js)
 let events = [];
 
+// How many recommended events are loaded, and how many cards show at once
+const RECOMMENDED_TO_LOAD = 40;
+const RECOMMENDED_TO_SHOW = 6;
+
 function makeEventCard(event) {
+  const details = [formatTimeRange(event.startsAt, event.endsAt), escapeHtml(event.location), formatDistance(event.distanceMiles)]
+    .filter(Boolean).join(' · ');
+  // Why this event was recommended, e.g. "Matches your interest in Running · 2 mi from you"
+  const reasons = event.recommendation ? event.recommendation.reasons : [];
   return `
     <a href="event.html?id=${event.id}" class="card event-card">
+      ${event.imageUrl ? `<img class="event-card-image" src="${event.imageUrl}" alt="" loading="lazy">` : ''}
       <div class="event-top">${escapeHtml(event.category)}</div>
       <div class="event-info">
         <h3 style="margin:0 0 6px">${escapeHtml(event.title)}</h3>
-        <p class="gray" style="margin:0 0 8px">${formatTimeRange(event.startsAt, event.endsAt)} · ${escapeHtml(event.location)}</p>
-        <span class="going">${event.goingCount} Hokies going</span>
+        <p class="gray" style="margin:0 0 8px">${details}</p>
+        ${reasons.length ? `<p class="recommend-reason">★ ${reasons.map(escapeHtml).join(' · ')}</p>` : ''}
+        <span class="going">${event.goingCount} Hokies going${event.iAmGoing ? ' · including you' : ''}</span>
       </div>
     </a>`;
 }
 
 function showEvents(category) {
   const list = document.getElementById('eventList');
-  let html = '';
-  for (const event of events) {
-    if (category === 'All' || event.category === category) {
-      html += makeEventCard(event);
-    }
-  }
-  list.innerHTML = html || '<p class="gray">No events here yet.</p>';
+  const matching = events.filter((event) => category === 'All' || event.category === category);
+  list.innerHTML = matching.length
+    ? matching.slice(0, RECOMMENDED_TO_SHOW).map(makeEventCard).join('')
+    : '<p class="gray">No upcoming events yet. <a href="create-event.html"><b>Host one!</b></a></p>';
 }
 
-const filterButtons = document.querySelectorAll('.filter');
-for (const button of filterButtons) {
-  button.addEventListener('click', () => {
-    for (const b of filterButtons) b.classList.remove('active');
-    button.classList.add('active');
-    showEvents(button.dataset.category);
-  });
+// One button per category that has a recommended event, in order of the best match
+function showCategoryFilters() {
+  const categories = ['All', ...new Set(events.map((event) => event.category))];
+  const container = document.getElementById('categoryFilters');
+  container.innerHTML = categories.map((category) =>
+    `<button class="filter${category === 'All' ? ' active' : ''}" data-category="${escapeHtml(category)}">${escapeHtml(category)}</button>`
+  ).join('');
+  // With only "All" there is nothing to filter
+  container.hidden = categories.length <= 2;
 }
 
-// Load this week's events, then show them all (the Events tab has everything else)
-loadEvents({ when: 'week' }).then((list) => {
+document.getElementById('categoryFilters').addEventListener('click', (click) => {
+  const button = click.target.closest('.filter');
+  if (!button) return;
+  for (const b of document.querySelectorAll('#categoryFilters .filter')) b.classList.remove('active');
+  button.classList.add('active');
+  showEvents(button.dataset.category);
+});
+
+loadEvents({ sort: 'recommended', limit: RECOMMENDED_TO_LOAD }).then((list) => {
   events = list;
+  showCategoryFilters();
   showEvents('All');
 });
 

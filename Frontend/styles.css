@@ -247,3 +247,6 @@ textarea.input { font-family: inherit; resize: vertical; }
 .attendee-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--maroon-light); color: var(--maroon); display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
 .attendee-name { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .attendee-message { padding: 6px 12px; font-size: 14px; }
+
+/* Discover page: why an event was recommended */
+.recommend-reason { color: var(--maroon); font-size: 13px; margin: 0 0 8px; }

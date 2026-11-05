@@ -69,7 +69,7 @@ const tagInput = document.getElementById('tagInput');
 // Same rules as the server: lowercase, letters, numbers, spaces, & ' and -
 function cleanTag(text) {
   const cleaned = text.trim().toLowerCase().replace(/^#/, '').replace(/\s+/g, ' ');
-  return /^[a-z0-9][a-z0-9 &'-]{0,24}$/.test(cleaned) ? cleaned : null;
+  return /^[a-z0-9][a-z0-9 &'-]{0,29}$/.test(cleaned) ? cleaned : null;
 }
 
 function showSelectedTags() {
@@ -83,7 +83,7 @@ function showSelectedTags() {
 function addTag(text) {
   const tag = cleanTag(text);
   if (!tag) {
-    setStatus('Tags can use letters, numbers, spaces, & \' and - (up to 25 characters).', 'red');
+    setStatus('Tags can use letters, numbers, spaces, & \' and - (up to 30 characters).', 'red');
     return;
   }
   if (!selectedTags.includes(tag) && selectedTags.length < maxTags) {

@@ -29,17 +29,15 @@
 
       <!-- LEFT: events -->
       <div>
-        <div class="filters">
-          <button class="filter active" data-category="All">All</button>
-          <button class="filter" data-category="Running">Running</button>
-          <button class="filter" data-category="Yoga">Yoga</button>
-          <button class="filter" data-category="Social">Social</button>
-        </div>
-
         <div class="events-header">
-          <h2>This week near you</h2>
+          <h2>Recommended for you</h2>
           <a href="events.html"><b>See all events →</b></a>
         </div>
+        <p class="gray" style="margin:0 0 4px">Upcoming events picked from your interests, location and what's coming up soon.</p>
+
+        <!-- app.js adds a button for each category in the recommended events -->
+        <div id="categoryFilters" class="filters"></div>
+
         <!-- app.js puts the event cards in here -->
         <div id="eventList" class="event-grid"></div>
       </div>
