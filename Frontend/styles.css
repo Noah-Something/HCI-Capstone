@@ -262,3 +262,15 @@ textarea.input { font-family: inherit; resize: vertical; }
 .social-links { display: flex; flex-wrap: wrap; gap: 6px; }
 .social-link { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--maroon); color: var(--maroon); background: white; font: inherit; font-size: 13px; font-weight: bold; cursor: pointer; }
 .social-link:hover { background: var(--maroon-light); }
+
+/* Groups */
+.group-filters { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin: 4px 0; }
+.group-filters > label { font-weight: bold; font-size: 14px; min-width: 0; }
+@media (max-width: 500px) { .group-filters { grid-template-columns: 1fr; } }
+.group-description { margin: 0 0 8px; color: var(--text); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.group-role { font-weight: bold; color: var(--maroon); font-size: 14px; }
+.group-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+.group-event { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; border-bottom: 1px solid var(--border); color: var(--text); }
+.group-event:last-child { border-bottom: none; }
+.role-badge { background: var(--maroon-light); color: var(--maroon); font-size: 12px; font-weight: bold; padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
+.attendee .attendee-message + .attendee-message { margin-left: 4px; }

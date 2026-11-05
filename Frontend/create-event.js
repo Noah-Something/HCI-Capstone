@@ -115,13 +115,23 @@ document.getElementById('tagSuggestionChips').addEventListener('click', (event) 
 });
 
 // ===== Host: myself or a group =====
+// Shows the group list (or a note when the user can't host for any group yet)
+function updateHostChoice() {
+  const asGroup = document.getElementById('hostGroupRadio').checked;
+  const hasGroups = document.getElementById('groupSelect').options.length > 0;
+  document.getElementById('groupSelect').hidden = !asGroup || !hasGroups;
+  document.getElementById('groupNote').hidden = !asGroup || hasGroups;
+}
+
 document.querySelectorAll('input[name="host"]').forEach((radio) => {
-  radio.addEventListener('change', () => {
-    const asGroup = document.getElementById('hostGroupRadio').checked;
-    const hasGroups = document.getElementById('groupSelect').options.length > 0;
-    document.getElementById('groupSelect').hidden = !asGroup || !hasGroups;
-    document.getElementById('groupNote').hidden = !asGroup || hasGroups;
-  });
+  radio.addEventListener('change', updateHostChoice);
+});
+
+// Picking a group fills in its category, if the user has not picked one yet
+document.getElementById('groupSelect').addEventListener('change', (event) => {
+  const groupCategory = event.target.selectedOptions[0]?.dataset.category;
+  const categorySelect = document.getElementById('category');
+  if (groupCategory && !categorySelect.value) categorySelect.value = groupCategory;
 });
 
 // ===== Image =====
@@ -221,8 +231,19 @@ async function setUpForm() {
     const option = document.createElement('option');
     option.value = group.id;
     option.textContent = group.name;
+    option.dataset.category = group.category || '';
     document.getElementById('groupSelect').appendChild(option);
   }
+
+  // Coming from a group page (create-event.html?group=3): host for that group if the user is its admin
+  const fromGroup = Number(new URLSearchParams(window.location.search).get('group'));
+  if (fromGroup && options.hostableGroups.some((group) => group.id === fromGroup)) {
+    document.getElementById('hostGroupRadio').checked = true;
+    const groupSelect = document.getElementById('groupSelect');
+    groupSelect.value = String(fromGroup);
+    groupSelect.dispatchEvent(new Event('change'));
+  }
+  updateHostChoice();
   for (const tag of new Set([...options.popularTags, ...options.suggestedTags])) {
     const chip = document.createElement('button');
     chip.type = 'button';

@@ -22,13 +22,37 @@
   </nav>
 
   <div class="page">
-    <div class="card coming-soon">
-      <span class="tag">Coming soon</span>
-      <h1 style="margin-top:16px">Groups</h1>
-      <p class="gray">Join or create Hokie groups for running, yoga, game days, and more.</p>
-      <a href="home.html" class="btn btn-maroon">Back to Discover</a>
+    <div class="events-header">
+      <div>
+        <h1>Groups</h1>
+        <p class="gray">Join or create Hokie groups for running, yoga, game days, and more.</p>
+      </div>
+      <a href="create-group.html" class="btn btn-maroon">+ Create group</a>
     </div>
+
+    <!-- All groups, or only the ones the user is in -->
+    <div class="filters" role="tablist">
+      <button class="filter active" data-view="all" role="tab">All groups</button>
+      <button class="filter" data-view="mine" role="tab">My groups</button>
+    </div>
+
+    <div class="group-filters">
+      <label>Search
+        <input id="groupSearch" class="input" type="search" placeholder="Group name or description">
+      </label>
+      <label>Category
+        <select id="groupCategory" class="input">
+          <option value="">Any category</option>
+        </select>
+      </label>
+    </div>
+
+    <p id="groupCount" class="gray"></p>
+    <div id="groupList" class="event-grid"></div>
   </div>
 
+  <script src="events.js"></script>
+  <script src="groups.js"></script>
+  <script src="groups-page.js"></script>
 </body>
 </html>

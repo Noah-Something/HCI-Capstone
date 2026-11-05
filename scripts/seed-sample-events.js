@@ -1,14 +1,44 @@
-// Creates sample events for testing the Events tab and the Discover page recommendations
+// Creates sample groups and events for testing the Groups and Events tabs and the Discover page recommendations
 //
-// Run:     npm run seed-events             (adds the sample events, or recreates them with fresh dates)
-// Remove:  npm run seed-events -- --remove (deletes only the sample events listed below)
+// Run:     npm run seed-events             (adds the samples, or recreates them with fresh dates)
+// Remove:  npm run seed-events -- --remove (deletes only the sample groups and events listed below)
 //
-// Uses DATABASE_URL, the same as server.js. The events are hosted by the sample Hokies,
+// Uses DATABASE_URL, the same as server.js. The groups and events belong to the sample Hokies,
 // so run "npm run seed" first (and start server.js once so the tables exist).
 // Dates are relative to the day you run this, so the events are always upcoming. Run it again to refresh them.
 const { Pool } = require('pg');
 
-// Every sample event: who hosts it, when (days from today and Eastern time), where, and who is going.
+// Sample groups, created before the events so some events can be hosted by a group.
+// The first admin is the group's creator. Only admins can host events for a group (like in server.js)
+const SAMPLE_GROUPS = [
+    {
+        name: 'DC Hokie Runners', category: 'Running',
+        description: 'Weekly runs around the Mall and Rock Creek for every pace. New runners always welcome!',
+        admins: ['sample_maya', 'sample_olivia'],
+        members: ['sample_jordan', 'sample_ethan', 'sample_tyler', 'sample_priya']
+    },
+    {
+        name: 'Hokie Game Day Crew', category: 'Game Days',
+        description: 'We find the best spots to watch every Hokies game in D.C. and Northern Virginia. Go Hokies!',
+        admins: ['sample_sam'],
+        members: ['sample_marcus', 'sample_jordan', 'sample_chris', 'sample_hannah', 'sample_maya']
+    },
+    {
+        name: 'Mindful Hokies', category: 'Yoga',
+        description: 'Yoga, mindful eating and phone-free time for Hokies looking to slow down.',
+        admins: ['sample_priya'],
+        members: ['sample_olivia', 'sample_hannah', 'sample_maya']
+    },
+    {
+        name: 'NoVA Board Gamers', category: 'Board Games',
+        description: 'Strategy and party games in Reston and Tysons. Bring a game or learn a new one.',
+        admins: ['sample_chris'],
+        members: ['sample_marcus']
+    }
+];
+
+// Every sample event: who hosts it (and the group, if it is hosted for one), when (days from today and
+// Eastern time), where, and who is going.
 // Together they cover every category, near and far locations, events today through three weeks out,
 // one that ends after midnight, and one in the past (for the "Past events" filter)
 const SAMPLE_EVENTS = [
@@ -22,7 +52,7 @@ const SAMPLE_EVENTS = [
         going: ['sample_ethan', 'sample_jordan', 'sample_maya']
     },
     {
-        host: 'sample_maya', title: 'Saturday Morning 5K on the Mall',
+        host: 'sample_maya', title: 'Saturday Morning 5K on the Mall', group: 'DC Hokie Runners',
         category: 'Running', location: 'National Mall, by the Washington Monument', latitude: 38.8895, longitude: -77.0353,
         day: 2, start: '08:00', minutes: 90,
         description: 'An easy-paced 5K loop around the Mall, then coffee nearby.\nAll paces welcome, walkers too!',
@@ -31,7 +61,7 @@ const SAMPLE_EVENTS = [
         going: ['sample_maya', 'sample_olivia', 'sample_jordan', 'sample_ethan', 'sample_priya', 'sample_tyler']
     },
     {
-        host: 'sample_priya', title: 'Sunrise Yoga at Gravelly Point',
+        host: 'sample_priya', title: 'Sunrise Yoga at Gravelly Point', group: 'Mindful Hokies',
         category: 'Yoga', location: 'Gravelly Point Park', latitude: 38.8653, longitude: -77.0425,
         day: 3, start: '07:00', minutes: 60,
         description: 'A calm outdoor flow while the planes take off over the river. Bring a mat and water.',
@@ -49,7 +79,7 @@ const SAMPLE_EVENTS = [
         going: ['sample_marcus', 'sample_chris']
     },
     {
-        host: 'sample_sam', title: 'Hokies Game-Day Watch Party',
+        host: 'sample_sam', title: 'Hokies Game-Day Watch Party', group: 'Hokie Game Day Crew',
         category: 'Game Days', location: 'Wilson Blvd, Clarendon', latitude: 38.8868, longitude: -77.0954,
         day: 4, start: '19:30', minutes: 240,
         description: 'Watch the Hokies with other D.C. alumni. Wear maroon and orange!',
@@ -58,7 +88,7 @@ const SAMPLE_EVENTS = [
         going: ['sample_sam', 'sample_marcus', 'sample_jordan', 'sample_maya', 'sample_chris', 'sample_hannah', 'sample_ethan']
     },
     {
-        host: 'sample_chris', title: 'Board Game Night in Reston',
+        host: 'sample_chris', title: 'Board Game Night in Reston', group: 'NoVA Board Gamers',
         category: 'Board Games', location: 'Reston Town Center', latitude: 38.9586, longitude: -77.3570,
         day: 5, start: '19:00', minutes: 210,
         description: 'Strategy games, party games and snacks. Bring a favorite or learn something new.',
@@ -67,7 +97,7 @@ const SAMPLE_EVENTS = [
         going: ['sample_chris', 'sample_marcus']
     },
     {
-        host: 'sample_olivia', title: 'Rock Creek Trail Run & Brunch',
+        host: 'sample_olivia', title: 'Rock Creek Trail Run & Brunch', group: 'DC Hokie Runners',
         category: 'Running', location: 'Peirce Mill, Rock Creek Park', latitude: 38.9404, longitude: -77.0524,
         day: 6, start: '08:30', minutes: 150,
         description: 'About 5 miles on shaded trails at a conversational pace, followed by brunch in Cleveland Park.',
@@ -122,7 +152,7 @@ const SAMPLE_EVENTS = [
         going: ['sample_jordan', 'sample_sam']
     },
     {
-        host: 'sample_priya', title: 'Mindful Eating Cooking Class',
+        host: 'sample_priya', title: 'Mindful Eating Cooking Class', group: 'Mindful Hokies',
         category: 'Food & Drink', location: 'Dupont Circle', latitude: 38.9096, longitude: -77.0434,
         day: 12, start: '18:30', minutes: 120,
         description: 'Cook a simple seasonal dinner together, then eat slowly and phone-free.',
@@ -195,7 +225,10 @@ const easternTime = (daysFromToday, time) => {
 
 // Looks up the sample users' ids, stops with a message if any are missing
 const findSampleUsers = async (client) => {
-    const usernames = [...new Set(SAMPLE_EVENTS.flatMap((event) => [event.host, ...event.going]))];
+    const usernames = [...new Set([
+        ...SAMPLE_EVENTS.flatMap((event) => [event.host, ...event.going]),
+        ...SAMPLE_GROUPS.flatMap((group) => [...group.admins, ...group.members])
+    ])];
     const placeholders = usernames.map((_, index) => `$${index + 1}`).join(', ');
     const result = await client.query(`SELECT id, username FROM users WHERE username IN (${placeholders})`, usernames);
     const ids = new Map(result.rows.map((row) => [row.username, row.id]));
@@ -223,6 +256,44 @@ const deleteSampleEvents = async (client) => {
     return result.rowCount;
 };
 
+// Only deletes groups with these names that a sample user created, never real groups
+// Memberships are removed too through ON DELETE CASCADE
+const deleteSampleGroups = async (client) => {
+    const names = SAMPLE_GROUPS.map((group) => group.name);
+    const creators = [...new Set(SAMPLE_GROUPS.map((group) => group.admins[0]))];
+    const namePlaceholders = names.map((_, index) => `$${index + 1}`).join(', ');
+    const creatorPlaceholders = creators.map((_, index) => `$${names.length + index + 1}`).join(', ');
+    const result = await client.query(
+        `DELETE FROM groups WHERE name IN (${namePlaceholders})
+         AND creator_id IN (SELECT id FROM users WHERE username IN (${creatorPlaceholders}))`,
+        [...names, ...creators]
+    );
+    return result.rowCount;
+};
+
+// Creates the sample groups and their members, returns a Map of group name -> id
+const createSampleGroups = async (client, userIds) => {
+    const groupIds = new Map();
+    for (const group of SAMPLE_GROUPS) {
+        const result = await client.query(
+            'INSERT INTO groups (name, description, category, creator_id) VALUES ($1, $2, $3, $4) RETURNING id',
+            [group.name, group.description, group.category, userIds.get(group.admins[0])]
+        );
+        const groupId = result.rows[0].id;
+        groupIds.set(group.name, groupId);
+        for (const [usernames, role] of [[group.admins, 'admin'], [group.members, 'member']]) {
+            for (const username of usernames) {
+                await client.query(
+                    'INSERT INTO group_members (group_id, user_id, role) VALUES ($1, $2, $3)',
+                    [groupId, userIds.get(username), role]
+                );
+            }
+        }
+        console.log(`  Group: ${group.name} (${group.admins.length + group.members.length} members)`);
+    }
+    return groupIds;
+};
+
 const seedSampleEvents = async () => {
     // All or nothing, so a failure never leaves half the samples behind
     const client = await pool.connect();
@@ -232,16 +303,19 @@ const seedSampleEvents = async () => {
 
         // Recreate instead of update, so the dates move forward every time this runs
         const replaced = await deleteSampleEvents(client);
+        await deleteSampleGroups(client);
+        const groupIds = await createSampleGroups(client, userIds);
 
         for (const sample of SAMPLE_EVENTS) {
             const startsAt = easternTime(sample.day, sample.start);
             const endsAt = new Date(startsAt.getTime() + sample.minutes * 60 * 1000);
             const result = await client.query(
                 `INSERT INTO events (title, starts_at, ends_at, category, location, latitude, longitude,
-                                     description, newcomer_tip, creator_id)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+                                     description, newcomer_tip, creator_id, group_id)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
                 [sample.title, startsAt, endsAt, sample.category, sample.location, sample.latitude, sample.longitude,
-                 sample.description, sample.newcomerTip || null, userIds.get(sample.host)]
+                 sample.description, sample.newcomerTip || null, userIds.get(sample.host),
+                 sample.group ? groupIds.get(sample.group) : null]
             );
             const eventId = result.rows[0].id;
 
@@ -260,7 +334,8 @@ const seedSampleEvents = async () => {
             console.log(`  ${when.padEnd(24)} ${sample.title}`);
         }
         await client.query('COMMIT');
-        console.log(`Saved ${SAMPLE_EVENTS.length} sample events${replaced ? ` (replaced ${replaced} older copies)` : ''}.`);
+        console.log(`Saved ${SAMPLE_GROUPS.length} sample groups and ${SAMPLE_EVENTS.length} sample events` +
+            `${replaced ? ` (replaced ${replaced} older event copies)` : ''}.`);
     } catch (error) {
         await client.query('ROLLBACK');
         throw error;
@@ -279,7 +354,9 @@ const main = async () => {
         if (process.argv.includes('--remove')) {
             const client = await pool.connect();
             try {
-                console.log(`Removed ${await deleteSampleEvents(client)} sample events.`);
+                const events = await deleteSampleEvents(client);
+                const groups = await deleteSampleGroups(client);
+                console.log(`Removed ${events} sample events and ${groups} sample groups.`);
             } finally {
                 client.release();
             }

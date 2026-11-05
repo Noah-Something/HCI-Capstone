@@ -133,6 +133,9 @@ const initDatabase = async () => {
         ALTER TABLE events ADD COLUMN IF NOT EXISTS category VARCHAR(50);
         ALTER TABLE events ADD COLUMN IF NOT EXISTS newcomer_tip TEXT;
 
+        -- Groups use the same categories as interests and events, so they can be filtered the same way
+        ALTER TABLE groups ADD COLUMN IF NOT EXISTS category VARCHAR(50);
+
         -- Link table: short tags on an event (lowercase, see normalizeTag)
         CREATE TABLE IF NOT EXISTS event_tags (
             event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -1046,7 +1049,7 @@ const formatEvent = (row, viewerId, tags = [], distanceMiles = null) => ({
     distanceMiles: distanceMiles === null ? null : Math.round(distanceMiles * 10) / 10,
     // Events hosted by a group show the group's name, otherwise the person who made it
     host: row.group_id
-        ? { type: 'group', name: row.group_name }
+        ? { type: 'group', name: row.group_name, id: row.group_id }
         : { type: 'user', name: row.creator_display_name || row.creator_username, username: row.creator_username },
     isMine: row.creator_id === viewerId,
     // ?v= changes when the image is replaced, so browsers do not show an old cached copy
@@ -1081,7 +1084,7 @@ const SUGGESTED_EVENT_TAGS = [...PROFILE_OPTIONS.interests, ...PROFILE_OPTIONS.w
 // Only group admins can post on behalf of a group (the groups feature will manage who is an admin)
 const findHostableGroups = async (userId) => {
     const result = await pool.query(
-        `SELECT groups.id, groups.name FROM groups
+        `SELECT groups.id, groups.name, groups.category FROM groups
          JOIN group_members ON group_members.group_id = groups.id
          WHERE group_members.user_id = $1 AND group_members.role = 'admin'
          ORDER BY groups.name`,
@@ -1556,6 +1559,290 @@ app.delete('/api/events/:id/rsvp', requireAuth, async (req, res) => {
             [eventId, req.userId]
         );
         return res.status(200).json({message: 'RSVP Removed', goingCount: await countGoing(eventId)});
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// ===== Groups =====
+// Anyone can create a group (they become its admin) or join one. Admins can host events on behalf of
+// the group (see findHostableGroups) and can make other members admins.
+
+const MIN_GROUP_NAME = 3;
+const MAX_GROUP_NAME = 100;
+const MAX_GROUP_DESCRIPTION = 1000;
+
+// Every group comes back with its member count, how many upcoming events it is hosting,
+// and the logged in user's role in it (null if they are not a member). $1 is always the user's id
+const GROUP_SELECT = `
+    SELECT groups.id, groups.name, groups.description, groups.category, groups.created_at,
+           COALESCE(member_counts.member_count, 0) AS member_count,
+           COALESCE(event_counts.event_count, 0) AS upcoming_event_count,
+           my_membership.role AS my_role
+    FROM groups
+    LEFT JOIN (SELECT group_id, COUNT(*)::int AS member_count FROM group_members GROUP BY group_id) member_counts
+           ON member_counts.group_id = groups.id
+    LEFT JOIN (SELECT group_id, COUNT(*)::int AS event_count FROM events
+               WHERE group_id IS NOT NULL AND COALESCE(ends_at, starts_at) >= NOW() GROUP BY group_id) event_counts
+           ON event_counts.group_id = groups.id
+    LEFT JOIN group_members my_membership
+           ON my_membership.group_id = groups.id AND my_membership.user_id = $1`;
+
+const formatGroup = (row) => ({
+    id: row.id,
+    name: row.name,
+    description: row.description || '',
+    category: row.category || null,
+    memberCount: row.member_count,
+    upcomingEventCount: row.upcoming_event_count,
+    // 'admin', 'member', or null when the user has not joined
+    myRole: row.my_role || null
+});
+
+// Group ids come from the address, returns null if it is not a whole number
+const parseGroupId = (value) => (Number.isInteger(Number(value)) && Number(value) > 0 ? Number(value) : null);
+
+// List groups, biggest first
+// Optional filters: ?q=<search name and description> &category=<name> &mine=1 (only groups the user is in)
+app.get('/api/groups', requireAuth, async (req, res) => {
+    const search = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
+    const category = PROFILE_OPTIONS.interests.includes(req.query.category) ? req.query.category : null;
+    const mine = req.query.mine === '1';
+
+    const conditions = [];
+    const params = [req.userId];
+    const addParam = (value) => {
+        params.push(value);
+        return `$${params.length}`;
+    };
+    if (search) {
+        const pattern = addParam(`%${search}%`);
+        conditions.push(`(groups.name ILIKE ${pattern} OR groups.description ILIKE ${pattern})`);
+    }
+    if (category) conditions.push(`groups.category = ${addParam(category)}`);
+    if (mine) conditions.push('my_membership.user_id IS NOT NULL');
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    try {
+        const result = await pool.query(
+            `${GROUP_SELECT} ${where} ORDER BY COALESCE(member_counts.member_count, 0) DESC, groups.name`,
+            params
+        );
+        return res.status(200).json({groups: result.rows.map(formatGroup)});
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// Create a group, the logged in user becomes its first admin
+// Body: {name, description, category}
+app.post('/api/groups', requireAuth, async (req, res) => {
+    const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+    const description = typeof req.body.description === 'string' ? req.body.description.trim() : '';
+    const {category} = req.body;
+
+    if (name.length < MIN_GROUP_NAME || name.length > MAX_GROUP_NAME) {
+        return res.status(400).json({message: `Group name must be ${MIN_GROUP_NAME} to ${MAX_GROUP_NAME} characters`});
+    }
+    if (description.length > MAX_GROUP_DESCRIPTION) {
+        return res.status(400).json({message: `Description must be ${MAX_GROUP_DESCRIPTION} characters or fewer`});
+    }
+    if (!PROFILE_OPTIONS.interests.includes(category)) {
+        return res.status(400).json({message: 'Please pick a category'});
+    }
+
+    const client = await pool.connect();
+    try {
+        // Names are unique ignoring capital letters, so "DC Runners" and "dc runners" can't both exist
+        const existing = await client.query('SELECT 1 FROM groups WHERE LOWER(name) = LOWER($1)', [name]);
+        if (existing.rows.length > 0) {
+            return res.status(409).json({message: 'A group with that name already exists'});
+        }
+
+        // The group and its first admin are saved together
+        await client.query('BEGIN');
+        const result = await client.query(
+            'INSERT INTO groups (name, description, category, creator_id) VALUES ($1, $2, $3, $4) RETURNING id',
+            [name, description || null, category, req.userId]
+        );
+        const groupId = result.rows[0].id;
+        await client.query(
+            `INSERT INTO group_members (group_id, user_id, role) VALUES ($1, $2, 'admin')`,
+            [groupId, req.userId]
+        );
+        await client.query('COMMIT');
+        return res.status(201).json({message: 'Group Created', id: groupId});
+    } catch (error) {
+        await client.query('ROLLBACK');
+        // 23505 is Postgres' unique violation code, in case two people pick the same name at once
+        if (error.code === '23505') {
+            return res.status(409).json({message: 'A group with that name already exists'});
+        }
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    } finally {
+        client.release();
+    }
+});
+
+// One group with its members (admins first) and the upcoming events it is hosting
+app.get('/api/groups/:id', requireAuth, async (req, res) => {
+    const groupId = parseGroupId(req.params.id);
+    if (!groupId) {
+        return res.status(404).json({message: 'Group Not Found'});
+    }
+    try {
+        const groupResult = await pool.query(`${GROUP_SELECT} WHERE groups.id = $2`, [req.userId, groupId]);
+        if (groupResult.rows.length === 0) {
+            return res.status(404).json({message: 'Group Not Found'});
+        }
+
+        const memberResult = await pool.query(
+            `SELECT users.id, users.username, profiles.display_name, profiles.grad_year, group_members.role
+             FROM group_members
+             JOIN users ON users.id = group_members.user_id
+             LEFT JOIN profiles ON profiles.user_id = users.id
+             WHERE group_members.group_id = $1
+             ORDER BY (group_members.role = 'admin') DESC, group_members.joined_at ASC`,
+            [groupId]
+        );
+
+        const eventResult = await pool.query(
+            `${EVENT_SELECT} WHERE events.group_id = $2 AND COALESCE(events.ends_at, events.starts_at) >= NOW()
+             ORDER BY events.starts_at ASC`,
+            [req.userId, groupId]
+        );
+        const viewerLocation = await findViewerLocation(req.userId);
+        const tagsByEvent = await findEventTags(eventResult.rows.map((row) => row.id));
+
+        return res.status(200).json({
+            group: formatGroup(groupResult.rows[0]),
+            members: memberResult.rows.map((row) => ({
+                username: row.username,
+                displayName: row.display_name || row.username,
+                gradYear: row.grad_year || null,
+                role: row.role,
+                isMe: row.id === req.userId
+            })),
+            events: eventResult.rows.map((row) =>
+                formatEvent(row, req.userId, tagsByEvent.get(row.id) || [], eventDistance(viewerLocation, row)))
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// Join a group as a member
+app.post('/api/groups/:id/join', requireAuth, async (req, res) => {
+    const groupId = parseGroupId(req.params.id);
+    if (!groupId) {
+        return res.status(404).json({message: 'Group Not Found'});
+    }
+    try {
+        const group = await pool.query('SELECT 1 FROM groups WHERE id = $1', [groupId]);
+        if (group.rows.length === 0) {
+            return res.status(404).json({message: 'Group Not Found'});
+        }
+        // Joining twice changes nothing (and never turns an admin back into a member)
+        await pool.query(
+            `INSERT INTO group_members (group_id, user_id, role) VALUES ($1, $2, 'member')
+             ON CONFLICT (group_id, user_id) DO NOTHING`,
+            [groupId, req.userId]
+        );
+        return res.status(200).json({message: 'Joined Group'});
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// Leave a group. A group always keeps an admin: if the last admin leaves, the longest-standing
+// member becomes admin. If nobody is left, the group is deleted (its events stay, hosted by their creators)
+app.delete('/api/groups/:id/membership', requireAuth, async (req, res) => {
+    const groupId = parseGroupId(req.params.id);
+    if (!groupId) {
+        return res.status(404).json({message: 'Group Not Found'});
+    }
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const left = await client.query(
+            'DELETE FROM group_members WHERE group_id = $1 AND user_id = $2',
+            [groupId, req.userId]
+        );
+        if (left.rowCount === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({message: 'You are not in this group'});
+        }
+
+        const remaining = await client.query(
+            'SELECT user_id, role FROM group_members WHERE group_id = $1 ORDER BY joined_at ASC',
+            [groupId]
+        );
+        let message = 'Left Group';
+        if (remaining.rows.length === 0) {
+            await client.query('DELETE FROM groups WHERE id = $1', [groupId]);
+            message = 'Left Group, it had no members left so it was removed';
+        } else if (!remaining.rows.some((row) => row.role === 'admin')) {
+            await client.query(
+                `UPDATE group_members SET role = 'admin' WHERE group_id = $1 AND user_id = $2`,
+                [groupId, remaining.rows[0].user_id]
+            );
+        }
+        await client.query('COMMIT');
+        return res.status(200).json({message});
+    } catch (error) {
+        await client.query('ROLLBACK');
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    } finally {
+        client.release();
+    }
+});
+
+// An admin changes a member's role. Body: {role: 'admin' | 'member'}
+// Admins can host events for the group, so this is how a group gets more than one organizer
+app.put('/api/groups/:id/members/:username', requireAuth, async (req, res) => {
+    const groupId = parseGroupId(req.params.id);
+    const {role} = req.body;
+    if (!groupId) {
+        return res.status(404).json({message: 'Group Not Found'});
+    }
+    if (!['admin', 'member'].includes(role)) {
+        return res.status(400).json({message: 'Role must be admin or member'});
+    }
+    try {
+        const roles = await pool.query(
+            `SELECT users.id, users.username, group_members.role FROM group_members
+             JOIN users ON users.id = group_members.user_id
+             WHERE group_members.group_id = $1`,
+            [groupId]
+        );
+        const me = roles.rows.find((row) => row.id === req.userId);
+        if (!me || me.role !== 'admin') {
+            return res.status(403).json({message: 'Only group admins can change roles'});
+        }
+        const target = roles.rows.find((row) => row.username === req.params.username);
+        if (!target) {
+            return res.status(404).json({message: 'That person is not in this group'});
+        }
+        if (role === 'member' && target.role === 'admin' && roles.rows.filter((row) => row.role === 'admin').length === 1) {
+            return res.status(400).json({message: 'A group needs at least one admin'});
+        }
+        await pool.query(
+            'UPDATE group_members SET role = $1 WHERE group_id = $2 AND user_id = $3',
+            [role, groupId, target.id]
+        );
+        return res.status(200).json({message: 'Role Updated'});
     } catch (error) {
         return res.status(500).json({
             message: 'Internal Server Error'

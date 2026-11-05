@@ -32,8 +32,18 @@ async function showEventPage() {
 
   // Host, tags and image (sample events on Live Server do not have these)
   if (selectedEvent.host) {
-    document.getElementById('eventHost').textContent = 'Hosted by ' + selectedEvent.host.name +
-      (selectedEvent.host.type === 'group' ? ' (group)' : '') + (selectedEvent.isMine ? ' · You' : '');
+    // Group events link to the group's page
+    const hostLine = document.getElementById('eventHost');
+    hostLine.textContent = 'Hosted by ';
+    if (selectedEvent.host.type === 'group' && selectedEvent.host.id) {
+      const groupLink = document.createElement('a');
+      groupLink.href = `group.html?id=${selectedEvent.host.id}`;
+      groupLink.textContent = selectedEvent.host.name;
+      hostLine.append(groupLink, ' (group)');
+    } else {
+      hostLine.append(selectedEvent.host.name);
+    }
+    if (selectedEvent.isMine) hostLine.append(' · You');
   }
   document.getElementById('eventTags').innerHTML = (selectedEvent.tags || [])
     .map((tag) => `<span class="chip">#${escapeEventHtml(tag)}</span>`).join('');
