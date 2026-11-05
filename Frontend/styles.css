@@ -197,3 +197,10 @@ textarea.input { font-family: inherit; resize: vertical; }
 
 /* Message button on Hokies cards */
 .hokie-actions { margin-top: 12px; }
+
+
+* ---------- Event details page ---------- */
+.event-detail { max-width: 700px; margin-top: 16px; padding: 0; overflow: hidden; }
+.event-detail h1 { font-size: 28px; }
+.tip { background: #FFF4EA; color: #4A2A0F; padding: 12px; border-radius: 12px; }
+.btn-going { background: var(--maroon-light); color: var(--maroon); border-color: var(--maroon); }

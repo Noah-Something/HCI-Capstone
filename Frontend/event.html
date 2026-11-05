@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HokieConnect - Event</title>
+  <title>HokieConnect – Event</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=DM+Sans:wght@400;700&display=swap">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -21,23 +21,23 @@
   </nav>
 
   <div class="page">
-    <a href="home.html"><b> Back to Discover </b></a>
+    <a href="home.html"><b>← Back to Discover</b></a>
 
     <div class="card event-detail">
-        <div class="event-top" id="eventCategory"></div>
-        <div class="event-info">
-            <h1 id="eventTitle"></h1>
-            <p class="gray" id="eventWhen"></p>
-            <p id="eventDescription"></p>
-            <p class="tip"><b>First time?</b> <span id="eventTip"></span></p>
-            <p class="going" id="eventGoing"></p>
-            <button id="rsvpButton" class="btn btn-maroon">I plan to go</button>
-        </div>
+      <div class="event-top" id="eventCategory"></div>
+      <div class="event-info">
+        <h1 id="eventTitle">Loading…</h1>
+        <p class="gray" id="eventWhen"></p>
+        <p id="eventDescription"></p>
+        <p class="tip" id="tipBox"><b>First time?</b> <span id="eventTip"></span></p>
+        <p class="going" id="goingCount"></p>
+        <button id="rsvpButton" class="btn btn-maroon">RSVP · I'm going</button>
+        <p id="rsvpStatus" style="color:red"></p>
+      </div>
     </div>
   </div>
 
+  <script src="events.js"></script>
   <script src="event.js"></script>
-  <script src="app.js"></script>
-
 </body>
 </html>
