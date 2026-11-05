@@ -40,7 +40,7 @@ function makeEventResultCard(event) {
       </a>
       ${hasLocation
         ? `<div class="event-card-actions">
-             <button type="button" class="btn show-on-map" data-event-id="${event.id}">📍 Show on map</button>
+             <button type="button" class="btn show-on-map" data-event-id="${event.id}">📍 Locate on map</button>
            </div>`
         : ''}
     </div>`;
