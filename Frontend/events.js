@@ -149,7 +149,8 @@ function resizeImage(file) {
 // Uses Google Maps when the server has a key (GOOGLEMAPS_KEY on Render), otherwise OpenStreetMap
 // through Leaflet so maps still work locally without a key.
 // Pages only use createMap(), which returns the same functions for both:
-//   map.setPins([{ point: [lat, lng], popupHtml }])   replace the pins and zoom to fit them
+//   map.setPins([{ id, point: [lat, lng], popupHtml }])  replace the pins and zoom to fit them
+//   map.focusPin(id)                                  zoom in on one of those pins and open its popup
 //   map.setDraggablePin([lat, lng], onMove)           one pin the user can drag (create page)
 //   map.onClick((lat, lng) => ...)                    clicks on the map
 //   map.setView([lat, lng], zoom)
@@ -159,6 +160,9 @@ const DEFAULT_MAP_CENTER = [38.9072, -77.0369];
 
 // Pins zoom in this far at most, so a single pin does not end up at street level
 const MAX_FIT_ZOOM = 14;
+
+// How far focusPin zooms in, close enough to see the streets around the event
+const FOCUS_ZOOM = 16;
 
 let mapLibraryPromise = null;
 
@@ -229,17 +233,24 @@ function createGoogleMap(elementId, center, zoom, picker) {
   });
   const infoWindow = new google.maps.InfoWindow();
   let pins = [];
+  // Pins by id, so focusPin can find them
+  const pinsById = new Map();
   let draggablePin = null;
+
+  const openPopup = (pin, popupHtml) => {
+    infoWindow.setContent(popupHtml);
+    infoWindow.open({ map, anchor: pin });
+  };
 
   return {
     setPins(items) {
       pins.forEach((pin) => { pin.map = null; });
-      pins = items.map(({ point, popupHtml }) => {
+      pinsById.clear();
+      infoWindow.close();
+      pins = items.map(({ id, point, popupHtml }) => {
         const pin = new google.maps.marker.AdvancedMarkerElement({ map, position: toLatLng(point), gmpClickable: true });
-        pin.addEventListener('gmp-click', () => {
-          infoWindow.setContent(popupHtml);
-          infoWindow.open({ map, anchor: pin });
-        });
+        pin.addEventListener('gmp-click', () => openPopup(pin, popupHtml));
+        if (id !== undefined) pinsById.set(id, { pin, point, popupHtml });
         return pin;
       });
       if (items.length === 1) {
@@ -253,6 +264,14 @@ function createGoogleMap(elementId, center, zoom, picker) {
           if (map.getZoom() > MAX_FIT_ZOOM) map.setZoom(MAX_FIT_ZOOM);
         });
       }
+    },
+    focusPin(id) {
+      const found = pinsById.get(id);
+      if (!found) return false;
+      map.setCenter(toLatLng(found.point));
+      map.setZoom(FOCUS_ZOOM);
+      openPopup(found.pin, found.popupHtml);
+      return true;
     },
     setDraggablePin(point, onMove) {
       if (!draggablePin) {
@@ -285,17 +304,30 @@ function createLeafletMap(elementId, center, zoom) {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(map);
   const pinLayer = L.layerGroup().addTo(map);
+  // Pins by id, so focusPin can find them
+  const pinsById = new Map();
   let draggablePin = null;
 
   return {
     setPins(items) {
       pinLayer.clearLayers();
-      items.forEach(({ point, popupHtml }) => L.marker(point).bindPopup(popupHtml).addTo(pinLayer));
+      pinsById.clear();
+      items.forEach(({ id, point, popupHtml }) => {
+        const pin = L.marker(point).bindPopup(popupHtml).addTo(pinLayer);
+        if (id !== undefined) pinsById.set(id, { pin, point });
+      });
       if (items.length === 1) {
         map.setView(items[0].point, MAX_FIT_ZOOM);
       } else if (items.length > 1) {
         map.fitBounds(items.map((item) => item.point), { padding: [30, 30], maxZoom: MAX_FIT_ZOOM });
       }
+    },
+    focusPin(id) {
+      const found = pinsById.get(id);
+      if (!found) return false;
+      map.setView(found.point, FOCUS_ZOOM);
+      found.pin.openPopup();
+      return true;
     },
     setDraggablePin(point, onMove) {
       if (!draggablePin) {

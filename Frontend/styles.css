@@ -250,3 +250,9 @@ textarea.input { font-family: inherit; resize: vertical; }
 
 /* Discover page: why an event was recommended */
 .recommend-reason { color: var(--maroon); font-size: 13px; margin: 0 0 8px; }
+
+/* Events tab cards: the link fills the card, the map button sits at the bottom */
+.event-card { display: flex; flex-direction: column; }
+.event-card-link { display: block; color: inherit; flex: 1; }
+.event-card-actions { padding: 0 14px 14px; }
+.show-on-map { padding: 6px 12px; font-size: 14px; cursor: pointer; }

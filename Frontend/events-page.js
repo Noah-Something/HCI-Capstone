@@ -19,21 +19,46 @@ function makeEventResultCard(event) {
     ? `Hosted by ${escapeEventHtml(event.host.name)}${event.host.type === 'group' ? ' (group)' : ''}${event.isMine ? ' · You' : ''}`
     : '';
 
+  const hasLocation = event.latitude !== null && event.latitude !== undefined;
+
+  // The card is a box instead of one big link, so the map button can sit next to the link (a button
+  // inside a link is not allowed in HTML). Clicking anywhere else on the card still opens the event
   return `
-    <a href="event.html?id=${event.id}" class="card event-card">
-      ${event.imageUrl
-        ? `<img class="event-card-image" src="${event.imageUrl}" alt="" loading="lazy">`
+    <div class="card event-card">
+      <a href="event.html?id=${event.id}" class="event-card-link">
+        ${event.imageUrl
+          ? `<img class="event-card-image" src="${event.imageUrl}" alt="" loading="lazy">`
+          : ''}
+        <div class="event-top">${escapeEventHtml(event.category)}</div>
+        <div class="event-info">
+          <h3 style="margin:0 0 6px">${escapeEventHtml(event.title)}</h3>
+          <p class="gray" style="margin:0 0 6px">${details}</p>
+          ${host ? `<p class="gray event-host">${host}</p>` : ''}
+          ${tags ? `<div class="chips" style="margin-bottom:8px">${tags}</div>` : ''}
+          <span class="going">${event.goingCount} Hokies going${event.iAmGoing ? ' · including you' : ''}</span>
+        </div>
+      </a>
+      ${hasLocation
+        ? `<div class="event-card-actions">
+             <button type="button" class="btn show-on-map" data-event-id="${event.id}">📍 Show on map</button>
+           </div>`
         : ''}
-      <div class="event-top">${escapeEventHtml(event.category)}</div>
-      <div class="event-info">
-        <h3 style="margin:0 0 6px">${escapeEventHtml(event.title)}</h3>
-        <p class="gray" style="margin:0 0 6px">${details}</p>
-        ${host ? `<p class="gray event-host">${host}</p>` : ''}
-        ${tags ? `<div class="chips" style="margin-bottom:8px">${tags}</div>` : ''}
-        <span class="going">${event.goingCount} Hokies going${event.iAmGoing ? ' · including you' : ''}</span>
-      </div>
-    </a>`;
+    </div>`;
 }
+
+// "Show on map": scroll up to the map, zoom in on the event and open its popup
+eventResults.addEventListener('click', async (click) => {
+  const button = click.target.closest('.show-on-map');
+  if (!button) return;
+  try {
+    const map = await eventsMapReady;
+    if (map.focusPin(Number(button.dataset.eventId))) {
+      document.getElementById('eventsMap').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  } catch (error) {
+    // The map could not load, showEventPins already hid it
+  }
+});
 
 // Put a pin on the map for every event that has coordinates, and zoom to fit them
 async function showEventPins(events) {
@@ -42,6 +67,7 @@ async function showEventPins(events) {
     map.setPins(events
       .filter((event) => event.latitude !== null && event.latitude !== undefined)
       .map((event) => ({
+        id: event.id,
         point: [event.latitude, event.longitude],
         popupHtml: `<b><a href="event.html?id=${event.id}">${escapeEventHtml(event.title)}</a></b><br>
                     ${formatTimeRange(event.startsAt, event.endsAt)} · ${escapeEventHtml(event.location)}`
