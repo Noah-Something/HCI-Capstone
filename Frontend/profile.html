@@ -89,6 +89,17 @@
         <div id="wellnessChoices" class="filters"></div>
       </div>
 
+      <!-- Social links: all optional -->
+      <div class="card profile-section">
+        <div class="section-header">
+          <h2>Social links</h2>
+          <select id="socialVisibility" class="visibility-select" aria-label="Who can see your social links"></select>
+        </div>
+        <p class="gray">Help Hokies connect with you elsewhere. Type your username or paste a link to your profile, and leave the rest blank.</p>
+        <!-- One box per platform, added from /api/profile/options -->
+        <div id="socialInputs" class="social-inputs"></div>
+      </div>
+
       <button type="submit" class="btn btn-maroon">Save profile</button>
       <p id="profileStatus"></p>
     </form>
@@ -225,7 +236,21 @@
           option.textContent = place;
           document.getElementById('neighborhoodSelect').appendChild(option);
         }
-        for (const section of ['neighborhood', 'interests', 'wellness']) {
+        for (const platform of options.socialPlatforms) {
+          const label = document.createElement('label');
+          label.htmlFor = `social-${platform.id}`;
+          label.textContent = platform.label;
+          const input = document.createElement('input');
+          input.id = `social-${platform.id}`;
+          input.className = 'input';
+          input.type = 'text';
+          input.maxLength = 200;
+          input.placeholder = platform.placeholder;
+          input.dataset.platform = platform.id;
+          input.value = profile.socialLinks[platform.id] || '';
+          document.getElementById('socialInputs').append(label, input);
+        }
+        for (const section of ['neighborhood', 'interests', 'wellness', 'social']) {
           const select = document.getElementById(`${section}Visibility`);
           for (const value of options.visibility) {
             const option = document.createElement('option');
@@ -272,10 +297,14 @@
         bio: document.getElementById('bio').value.trim(),
         interests: selectedChips('interestChoices'),
         wellnessPreferences: selectedChips('wellnessChoices'),
+        // { linkedin: '...', discord: '...' }, blank boxes remove that link
+        socialLinks: Object.fromEntries([...document.querySelectorAll('#socialInputs input')]
+          .map((input) => [input.dataset.platform, input.value.trim()])),
         visibility: {
           neighborhood: document.getElementById('neighborhoodVisibility').value,
           interests: document.getElementById('interestsVisibility').value,
-          wellness: document.getElementById('wellnessVisibility').value
+          wellness: document.getElementById('wellnessVisibility').value,
+          social: document.getElementById('socialVisibility').value
         }
       };
 

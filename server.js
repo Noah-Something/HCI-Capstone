@@ -109,6 +109,16 @@ const initDatabase = async () => {
         ALTER TABLE profiles ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
         ALTER TABLE profiles ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
 
+        -- Social links: one row per platform the user filled in (handles, see SOCIAL_PLATFORMS)
+        CREATE TABLE IF NOT EXISTS user_social_links (
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            platform VARCHAR(20) NOT NULL,
+            value VARCHAR(200) NOT NULL,
+            PRIMARY KEY (user_id, platform)
+        );
+        ALTER TABLE profiles ADD COLUMN IF NOT EXISTS social_visibility VARCHAR(20) NOT NULL DEFAULT 'hokies'
+            CHECK (social_visibility IN ('hokies', 'only_me'));
+
         -- Direct messages between two users, read_at stays NULL until the recipient opens the conversation
         CREATE TABLE IF NOT EXISTS messages (
             id SERIAL PRIMARY KEY,
@@ -301,6 +311,107 @@ const compatibilityScore = (viewer, other, distanceMiles) => {
     return { score: Math.round(total), breakdown };
 };
 
+// ===== Social links =====
+// Users can type a handle ("@jane.doe") or paste a profile link, both are saved as just the handle.
+// Links shown to other Hokies are always built from the handle here, never from what the user typed,
+// so a saved link can only ever point at the platform it belongs to.
+//   hosts:   sites a pasted link may come from (www. and m. are allowed in front)
+//   pattern: what a valid handle looks like on that platform
+//   toUrl:   builds the profile link, null when the platform has no public profile links (Discord)
+const SOCIAL_PLATFORMS = [
+    {
+        id: 'linkedin', label: 'LinkedIn', placeholder: 'linkedin.com/in/your-name',
+        hosts: ['linkedin.com'],
+        // A profile link looks like linkedin.com/in/<name>
+        handleFromPath: (parts) => (parts[0] === 'in' ? parts[1] : null),
+        pattern: /^[a-z0-9-]{3,100}$/,
+        toUrl: (handle) => `https://www.linkedin.com/in/${handle}`
+    },
+    {
+        id: 'instagram', label: 'Instagram', placeholder: '@your.handle',
+        hosts: ['instagram.com'],
+        handleFromPath: (parts) => parts[0],
+        pattern: /^[a-z0-9._]{1,30}$/,
+        toUrl: (handle) => `https://www.instagram.com/${handle}`
+    },
+    {
+        id: 'github', label: 'GitHub', placeholder: 'your-username',
+        hosts: ['github.com'],
+        handleFromPath: (parts) => parts[0],
+        pattern: /^[a-z0-9][a-z0-9-]{0,38}$/,
+        toUrl: (handle) => `https://github.com/${handle}`
+    },
+    {
+        id: 'x', label: 'X', placeholder: '@yourhandle',
+        hosts: ['x.com', 'twitter.com'],
+        handleFromPath: (parts) => parts[0],
+        pattern: /^[a-z0-9_]{1,15}$/,
+        toUrl: (handle) => `https://x.com/${handle}`
+    },
+    {
+        // Discord profile links need a numeric user id people don't know, so only the username is shown
+        id: 'discord', label: 'Discord', placeholder: 'your.username',
+        hosts: [],
+        handleFromPath: () => null,
+        pattern: /^[a-z0-9._]{2,32}$/,
+        toUrl: () => null
+    },
+    {
+        // A personal website is saved as the whole link, and must use https
+        id: 'website', label: 'Website', placeholder: 'https://your-site.com',
+        isWebsite: true,
+        toUrl: (link) => link
+    }
+];
+
+const MAX_WEBSITE_LENGTH = 200;
+
+// Turns what the user typed into the handle (or website link) to save, or null if it is not valid
+const parseSocialLink = (platform, input) => {
+    const text = input.trim();
+
+    if (platform.isWebsite) {
+        try {
+            // "my-site.com" is fine, it gets https:// added. Only https links are allowed
+            const url = new URL(/^[a-z]+:\/\//i.test(text) ? text : `https://${text}`);
+            const valid = url.protocol === 'https:' && url.hostname.includes('.') &&
+                !url.username && !url.password && url.href.length <= MAX_WEBSITE_LENGTH;
+            return valid ? url.href : null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    // A pasted link: it must be from this platform's site, then the handle is taken from its path
+    const lower = text.toLowerCase();
+    const looksLikeLink = /^https?:\/\//.test(lower) ||
+        platform.hosts.some((host) => [host, `www.${host}`, `m.${host}`].some((prefix) => lower.startsWith(`${prefix}/`)));
+    let handle;
+    if (looksLikeLink) {
+        try {
+            const url = new URL(/^https?:\/\//.test(lower) ? text : `https://${text}`);
+            const host = url.hostname.toLowerCase().replace(/^(www|m)\./, '');
+            if (!platform.hosts.includes(host)) return null;
+            handle = platform.handleFromPath(url.pathname.split('/').filter(Boolean).map(decodeURIComponent));
+        } catch (error) {
+            return null;
+        }
+    } else {
+        handle = text.replace(/^@/, '');
+    }
+    handle = (handle || '').toLowerCase();
+    return platform.pattern.test(handle) ? handle : null;
+};
+
+// Rows of {platform, value} -> the list shown to other Hokies, in SOCIAL_PLATFORMS order
+const formatSocialLinks = (rows) => SOCIAL_PLATFORMS
+    .map((platform) => {
+        const row = rows.find((r) => r.platform === platform.id);
+        if (!row) return null;
+        return { platform: platform.id, label: platform.label, handle: row.value, url: platform.toUrl(row.value) };
+    })
+    .filter(Boolean);
+
 // Allowed choices for the profile page, edit these lists to add or remove options
 const PROFILE_OPTIONS = {
     interests: [
@@ -314,12 +425,13 @@ const PROFILE_OPTIONS = {
     ],
     neighborhoods: NEIGHBORHOODS.map((place) => place.name),
     visibility: ['hokies', 'only_me'],
-    scoreWeights: SCORE_WEIGHTS
+    scoreWeights: SCORE_WEIGHTS,
+    socialPlatforms: SOCIAL_PLATFORMS.map(({id, label, placeholder}) => ({id, label, placeholder}))
 };
 
 // Returns an error message if the profile is invalid, otherwise null
 // Location is not part of this, it is saved separately through /api/profile/location
-const validateProfile = ({displayName, gradYear, bio, wellnessPreferences, interests, visibility}) => {
+const validateProfile = ({displayName, gradYear, bio, wellnessPreferences, interests, visibility, socialLinks}) => {
     if (displayName && (typeof displayName !== 'string' || displayName.length > 100)) {
         return 'Display Name must be 100 characters or fewer';
     }
@@ -341,6 +453,24 @@ const validateProfile = ({displayName, gradYear, bio, wellnessPreferences, inter
     if (!visibility || !['neighborhood', 'interests', 'wellness'].every(
         (section) => PROFILE_OPTIONS.visibility.includes(visibility[section]))) {
         return 'Invalid Visibility Settings';
+    }
+    // Social links are optional, older pages that do not send them keep working
+    if (visibility.social !== undefined && !PROFILE_OPTIONS.visibility.includes(visibility.social)) {
+        return 'Invalid Visibility Settings';
+    }
+    if (socialLinks !== undefined) {
+        if (typeof socialLinks !== 'object' || socialLinks === null || Array.isArray(socialLinks)) {
+            return 'Invalid Social Links';
+        }
+        for (const [id, value] of Object.entries(socialLinks)) {
+            const platform = SOCIAL_PLATFORMS.find((p) => p.id === id);
+            if (!platform || typeof value !== 'string') return 'Invalid Social Links';
+            if (value.trim() && !parseSocialLink(platform, value)) {
+                return platform.isWebsite
+                    ? 'Website must be a full link starting with https://'
+                    : `That does not look like a valid ${platform.label} ${platform.hosts.length ? 'username or profile link' : 'username'}`;
+            }
+        }
     }
     return null;
 };
@@ -470,6 +600,10 @@ app.get('/api/profile', requireAuth, async (req, res) => {
             'SELECT preference FROM user_wellness_preferences WHERE user_id = $1 ORDER BY preference',
             [req.userId]
         );
+        const socialResult = await pool.query(
+            'SELECT platform, value FROM user_social_links WHERE user_id = $1',
+            [req.userId]
+        );
         const profile = profileResult.rows[0] || {};
 
         return res.status(200).json({
@@ -481,10 +615,13 @@ app.get('/api/profile', requireAuth, async (req, res) => {
             bio: profile.bio || '',
             interests: interestResult.rows.map((row) => row.interest),
             wellnessPreferences: wellnessResult.rows.map((row) => row.preference),
+            // { linkedin: 'jane-doe', discord: 'jane.doe', ... } for the platforms they filled in
+            socialLinks: Object.fromEntries(socialResult.rows.map((row) => [row.platform, row.value])),
             visibility: {
                 neighborhood: profile.neighborhood_visibility || 'hokies',
                 interests: profile.interests_visibility || 'hokies',
-                wellness: profile.wellness_visibility || 'hokies'
+                wellness: profile.wellness_visibility || 'hokies',
+                social: profile.social_visibility || 'hokies'
             }
         });
     } catch (error) {
@@ -496,21 +633,23 @@ app.get('/api/profile', requireAuth, async (req, res) => {
 
 // Create or replace the logged in user's profile
 app.put('/api/profile', requireAuth, async (req, res) => {
-    const {displayName, gradYear, bio, wellnessPreferences, interests, visibility} = req.body;
+    const {displayName, gradYear, bio, wellnessPreferences, interests, visibility, socialLinks} = req.body;
 
     const validationError = validateProfile(req.body);
     if (validationError) {
         return res.status(400).json({message: validationError});
     }
 
-    // Profile, interests and wellness preferences are saved together so a failure never leaves half a profile
+    // Profile, interests, wellness preferences and social links are saved together
+    // so a failure never leaves half a profile
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+        // Social visibility keeps its saved value when it is not sent ($8 is null)
         await client.query(
-            `INSERT INTO profiles (user_id, display_name, grad_year, bio,
-                                   neighborhood_visibility, interests_visibility, wellness_visibility, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+            `INSERT INTO profiles (user_id, display_name, grad_year, bio, neighborhood_visibility,
+                                   interests_visibility, wellness_visibility, social_visibility, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'hokies'), NOW())
              ON CONFLICT (user_id) DO UPDATE SET
                 display_name = EXCLUDED.display_name,
                 grad_year = EXCLUDED.grad_year,
@@ -518,10 +657,22 @@ app.put('/api/profile', requireAuth, async (req, res) => {
                 neighborhood_visibility = EXCLUDED.neighborhood_visibility,
                 interests_visibility = EXCLUDED.interests_visibility,
                 wellness_visibility = EXCLUDED.wellness_visibility,
+                social_visibility = COALESCE($8, profiles.social_visibility),
                 updated_at = NOW()`,
             [req.userId, displayName || null, gradYear || null, bio || null,
-             visibility.neighborhood, visibility.interests, visibility.wellness]
+             visibility.neighborhood, visibility.interests, visibility.wellness, visibility.social || null]
         );
+        if (socialLinks !== undefined) {
+            await client.query('DELETE FROM user_social_links WHERE user_id = $1', [req.userId]);
+            for (const [id, value] of Object.entries(socialLinks)) {
+                if (!value.trim()) continue;
+                const platform = SOCIAL_PLATFORMS.find((p) => p.id === id);
+                await client.query(
+                    'INSERT INTO user_social_links (user_id, platform, value) VALUES ($1, $2, $3)',
+                    [req.userId, id, parseSocialLink(platform, value)]
+                );
+            }
+        }
         await client.query('DELETE FROM user_interests WHERE user_id = $1', [req.userId]);
         for (const interest of new Set(interests)) {
             await client.query(
@@ -638,6 +789,12 @@ app.get('/api/hokies', requireAuth, async (req, res) => {
             (await pool.query('SELECT user_id, interest FROM user_interests')).rows, 'interest');
         const wellnessByUser = groupByUser(
             (await pool.query('SELECT user_id, preference FROM user_wellness_preferences')).rows, 'preference');
+        // Social links by user id, as the {platform, value} rows formatSocialLinks expects
+        const socialByUser = new Map();
+        for (const row of (await pool.query('SELECT user_id, platform, value FROM user_social_links')).rows) {
+            if (!socialByUser.has(row.user_id)) socialByUser.set(row.user_id, []);
+            socialByUser.get(row.user_id).push(row);
+        }
 
         // The viewer's own profile is always fully used, even the parts they hide from others
         const viewerRow = profileResult.rows.find((row) => row.id === req.userId) || {};
@@ -681,6 +838,7 @@ app.get('/api/hokies', requireAuth, async (req, res) => {
                 sharedInterests: other.interests.filter((i) => viewer.interests.includes(i)),
                 wellnessPreferences: other.wellnessPreferences,
                 sharedWellness: other.wellnessPreferences.filter((p) => viewer.wellnessPreferences.includes(p)),
+                socialLinks: row.social_visibility === 'hokies' ? formatSocialLinks(socialByUser.get(row.id) || []) : [],
                 score,
                 breakdown
             });

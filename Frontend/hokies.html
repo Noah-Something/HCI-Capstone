@@ -93,6 +93,15 @@
       .map((item) => `<span class="chip${shared.includes(item) ? ' chip-shared' : ''}">${escapeHtml(item)}</span>`)
       .join('');
 
+    // Links to their other profiles. The server builds every link, so they only point at the real platform.
+    // Discord has no profile links, so clicking it copies the username instead
+    const makeSocialLinks = (links) => (links || []).map((link) => link.url
+      ? `<a class="social-link" href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer nofollow"
+            title="${escapeHtml(link.label)}: ${escapeHtml(link.handle)}">${escapeHtml(link.label)} ↗</a>`
+      : `<button type="button" class="social-link copy-handle" data-handle="${escapeHtml(link.handle)}"
+            title="Copy ${escapeHtml(link.label)} username">${escapeHtml(link.label)}: ${escapeHtml(link.handle)}</button>`
+    ).join('');
+
     const makeHokieCard = (hokie) => {
       const details = [
         hokie.gradYear ? `Class of ${hokie.gradYear}` : '',
@@ -117,6 +126,7 @@
           ${hokie.bio ? `<p>${escapeHtml(hokie.bio)}</p>` : ''}
           ${hokie.interests.length ? `<p class="chip-label">Interests</p><div class="chips">${makeChips(hokie.interests, hokie.sharedInterests)}</div>` : ''}
           ${hokie.wellnessPreferences.length ? `<p class="chip-label">Wellness</p><div class="chips">${makeChips(hokie.wellnessPreferences, hokie.sharedWellness)}</div>` : ''}
+          ${hokie.socialLinks && hokie.socialLinks.length ? `<p class="chip-label">Find them on</p><div class="social-links">${makeSocialLinks(hokie.socialLinks)}</div>` : ''}
           <div class="hokie-actions">
             <a href="messages.html?user=${encodeURIComponent(hokie.username)}" class="btn btn-maroon">Message</a>
           </div>
@@ -192,6 +202,21 @@
     document.getElementById('gradYearFilter').addEventListener('input', () => {
       clearTimeout(typingTimer);
       typingTimer = setTimeout(loadHokies, 400);
+    });
+
+    // Copy a Discord username when its button is clicked
+    hokieList.addEventListener('click', async (click) => {
+      const button = click.target.closest('.copy-handle');
+      if (!button) return;
+      const original = button.textContent;
+      try {
+        await navigator.clipboard.writeText(button.dataset.handle);
+        button.textContent = 'Copied!';
+      } catch (error) {
+        // Clipboard can be blocked (for example on http pages), show the name so it can be copied by hand
+        button.textContent = button.dataset.handle;
+      }
+      setTimeout(() => { button.textContent = original; }, 1500);
     });
 
     loadFilters().then(loadHokies).catch(() => {

@@ -19,35 +19,42 @@ const SAMPLE_PROFILES = [
         bio: 'Just moved to Clarendon for a consulting job. Always down for a weekend run or brunch.',
         neighborhood: 'Clarendon', latitude: 38.89, longitude: -77.09,
         interests: ['Running', 'Yoga', 'Food & Drink'],
-        wellnessPreferences: ['Mind-body movement', 'Cardio and Endurance', 'Meeting new people']
+        wellnessPreferences: ['Mind-body movement', 'Cardio and Endurance', 'Meeting new people'],
+        socialLinks: { linkedin: 'hokieconnect-sample-maya', instagram: 'hokieconnect.sample.maya', discord: 'hokieconnect.maya' }
     },
     {
         username: 'sample_jordan', displayName: 'Jordan Lee', gradYear: 2025,
         bio: 'Training for my first half marathon. Looking for people to ride the Custis Trail with too.',
         neighborhood: 'Ballston', latitude: 38.88, longitude: -77.11,
         interests: ['Running', 'Cycling', 'Gym & Fitness'],
-        wellnessPreferences: ['Cardio and Endurance', 'Group Connection']
+        wellnessPreferences: ['Cardio and Endurance', 'Group Connection'],
+        socialLinks: { linkedin: 'hokieconnect-sample-jordan', x: 'hc_sample_jdn' }
     },
     {
         username: 'sample_olivia', displayName: 'Olivia Martin', gradYear: 2026,
         bio: 'Sunrise yoga and trail runs are my reset. Let\'s explore Rock Creek together!',
         neighborhood: 'Capitol Hill', latitude: 38.89, longitude: -76.99,
         interests: ['Running', 'Yoga', 'Hiking'],
-        wellnessPreferences: ['Mind-body movement', 'Mindfulness and Relaxation', 'Cardio and Endurance']
+        wellnessPreferences: ['Mind-body movement', 'Mindfulness and Relaxation', 'Cardio and Endurance'],
+        socialLinks: { instagram: 'hokieconnect.sample.olivia', website: 'https://example.com/olivia' }
     },
     {
         username: 'sample_sam', displayName: 'Sam Rivera', gradYear: 2024,
         bio: 'Never miss a game day. Hosting watch parties near Nationals Park.',
         neighborhood: 'Navy Yard', latitude: 38.88, longitude: -77.00,
         interests: ['Game Days', 'Social', 'Food & Drink'],
-        wellnessPreferences: ['Meeting new people', 'Group Connection']
+        wellnessPreferences: ['Meeting new people', 'Group Connection'],
+        socialLinks: { discord: 'hokieconnect.sam', x: 'hc_sample_sam' }
     },
     {
         username: 'sample_priya', displayName: 'Priya Shah', gradYear: 2026,
         bio: 'Museum hopper and yoga regular. Trying to spend less time on my phone.',
         neighborhood: 'Dupont Circle', latitude: 38.91, longitude: -77.04,
         interests: ['Yoga', 'Arts & Music'],
-        wellnessPreferences: ['Mindfulness and Relaxation', 'Digital Detox', 'Mindful Eating']
+        wellnessPreferences: ['Mindfulness and Relaxation', 'Digital Detox', 'Mindful Eating'],
+        // Has social links but hides them, so they never show on the Hokies page
+        socialLinks: { linkedin: 'hokieconnect-sample-priya' },
+        visibility: { social: 'only_me' }
     },
     {
         username: 'sample_tyler', displayName: 'Tyler Brooks', gradYear: 2019,
@@ -61,7 +68,8 @@ const SAMPLE_PROFILES = [
         bio: 'Software engineer out in Reston. Board game nights every Thursday, all welcome.',
         neighborhood: 'Reston', latitude: 38.96, longitude: -77.36,
         interests: ['Board Games', 'Game Days'],
-        wellnessPreferences: ['Brain Stimulation', 'Group Connection']
+        wellnessPreferences: ['Brain Stimulation', 'Group Connection'],
+        socialLinks: { linkedin: 'hokieconnect-sample-chris', github: 'hokieconnect-sample-chris', website: 'https://example.com/chris' }
     },
     {
         // Hides their neighborhood, so they show no location and are left out of distance filters
@@ -124,7 +132,7 @@ const seedSampleProfiles = async () => {
     try {
         await client.query('BEGIN');
         for (const sample of SAMPLE_PROFILES) {
-            const visibility = { neighborhood: 'hokies', interests: 'hokies', wellness: 'hokies', ...sample.visibility };
+            const visibility = { neighborhood: 'hokies', interests: 'hokies', wellness: 'hokies', social: 'hokies', ...sample.visibility };
 
             const userResult = await client.query(
                 `INSERT INTO users (username, hashed_password) VALUES ($1, $2)
@@ -136,8 +144,9 @@ const seedSampleProfiles = async () => {
 
             await client.query(
                 `INSERT INTO profiles (user_id, display_name, grad_year, bio, neighborhood, latitude, longitude,
-                                       neighborhood_visibility, interests_visibility, wellness_visibility, updated_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+                                       neighborhood_visibility, interests_visibility, wellness_visibility,
+                                       social_visibility, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
                  ON CONFLICT (user_id) DO UPDATE SET
                     display_name = EXCLUDED.display_name,
                     grad_year = EXCLUDED.grad_year,
@@ -148,9 +157,11 @@ const seedSampleProfiles = async () => {
                     neighborhood_visibility = EXCLUDED.neighborhood_visibility,
                     interests_visibility = EXCLUDED.interests_visibility,
                     wellness_visibility = EXCLUDED.wellness_visibility,
+                    social_visibility = EXCLUDED.social_visibility,
                     updated_at = NOW()`,
                 [userId, sample.displayName, sample.gradYear, sample.bio || null, sample.neighborhood,
-                 sample.latitude, sample.longitude, visibility.neighborhood, visibility.interests, visibility.wellness]
+                 sample.latitude, sample.longitude, visibility.neighborhood, visibility.interests, visibility.wellness,
+                 visibility.social]
             );
 
             await client.query('DELETE FROM user_interests WHERE user_id = $1', [userId]);
@@ -162,6 +173,14 @@ const seedSampleProfiles = async () => {
                 await client.query(
                     'INSERT INTO user_wellness_preferences (user_id, preference) VALUES ($1, $2)',
                     [userId, preference]
+                );
+            }
+            // Handles are written already cleaned up (the way server.js saves them), all made up for testing
+            await client.query('DELETE FROM user_social_links WHERE user_id = $1', [userId]);
+            for (const [platform, value] of Object.entries(sample.socialLinks || {})) {
+                await client.query(
+                    'INSERT INTO user_social_links (user_id, platform, value) VALUES ($1, $2, $3)',
+                    [userId, platform, value]
                 );
             }
             console.log(`  ${sample.username.padEnd(15)} ${sample.displayName}`);
