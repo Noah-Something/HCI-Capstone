@@ -952,6 +952,18 @@ const eventDistance = (viewerLocation, row) => (viewerLocation && row.latitude !
     ? distanceInMiles(viewerLocation.latitude, viewerLocation.longitude, row.latitude, row.longitude)
     : null;
 
+// Map settings for the pages. The Google Maps key comes from the GOOGLEMAPS_KEY environment variable
+// (set on Render). A Maps JavaScript key is always visible in the browser, so it is protected by the
+// website restrictions set on the key in Google Cloud Console, not by keeping it secret.
+// Without a key the pages fall back to OpenStreetMap maps (handy for local development)
+app.get('/api/maps-config', (req, res) => {
+    return res.status(200).json({
+        googleMapsKey: process.env.GOOGLEMAPS_KEY || null,
+        // Advanced markers need a Map ID, DEMO_MAP_ID works until you create your own in Cloud Console
+        googleMapsMapId: process.env.GOOGLEMAPS_MAP_ID || 'DEMO_MAP_ID'
+    });
+});
+
 // Choices for the Events and Create event pages
 app.get('/api/event-options', requireAuth, async (req, res) => {
     try {

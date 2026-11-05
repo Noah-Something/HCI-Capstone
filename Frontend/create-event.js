@@ -1,5 +1,5 @@
 // ===== HokieConnect – Create event page code =====
-// Uses loadEventOptions, createEvent, uploadEventImage, resizeImage, makeMap and escapeEventHtml from events.js
+// Uses loadEventOptions, createEvent, uploadEventImage, resizeImage, createMap and escapeEventHtml from events.js
 
 if (!sessionStorage.getItem('authToken')) {
   window.location.href = 'index.html';
@@ -30,29 +30,23 @@ startsAtInput.addEventListener('change', () => {
 });
 
 // ===== Map pin =====
-const pickerMap = makeMap('pickerMap');
-let pin = null;
+const pickerMapReady = createMap('pickerMap', { picker: true });
 
-function placePin(latitude, longitude) {
+// Saves the point and moves the pin there (dragging the pin calls this again with the new spot)
+async function placePin(latitude, longitude) {
   // Rounded to about 10 meters, more than enough to find an event
   pickedPoint = {
     latitude: Math.round(latitude * 10000) / 10000,
     longitude: Math.round(longitude * 10000) / 10000
   };
-  if (pin) {
-    pin.setLatLng([latitude, longitude]);
-  } else {
-    pin = L.marker([latitude, longitude], { draggable: true }).addTo(pickerMap);
-    pin.on('dragend', () => {
-      const point = pin.getLatLng();
-      placePin(point.lat, point.lng);
-    });
-  }
+  (await pickerMapReady).setDraggablePin([latitude, longitude], placePin);
   document.getElementById('coordinates').textContent =
     `Pin placed at ${pickedPoint.latitude}, ${pickedPoint.longitude}`;
 }
 
-pickerMap.on('click', (event) => placePin(event.latlng.lat, event.latlng.lng));
+pickerMapReady
+  .then((map) => map.onClick(placePin))
+  .catch(() => setStatus('The map could not load. Please refresh the page.', 'red'));
 
 document.getElementById('useLocationButton').addEventListener('click', () => {
   if (!navigator.geolocation) {
@@ -60,9 +54,9 @@ document.getElementById('useLocationButton').addEventListener('click', () => {
     return;
   }
   navigator.geolocation.getCurrentPosition(
-    (position) => {
-      placePin(position.coords.latitude, position.coords.longitude);
-      pickerMap.setView([position.coords.latitude, position.coords.longitude], 16);
+    async (position) => {
+      await placePin(position.coords.latitude, position.coords.longitude);
+      (await pickerMapReady).setView([position.coords.latitude, position.coords.longitude], 16);
     },
     () => setStatus('Could not get your location. Click the map to place the pin instead.', 'red'),
     { timeout: 10000 }

@@ -145,17 +145,175 @@ function resizeImage(file) {
   });
 }
 
-// ===== Maps (Leaflet + OpenStreetMap, loaded in the page's <head>) =====
+// ===== Maps =====
+// Uses Google Maps when the server has a key (GOOGLEMAPS_KEY on Render), otherwise OpenStreetMap
+// through Leaflet so maps still work locally without a key.
+// Pages only use createMap(), which returns the same functions for both:
+//   map.setPins([{ point: [lat, lng], popupHtml }])   replace the pins and zoom to fit them
+//   map.setDraggablePin([lat, lng], onMove)           one pin the user can drag (create page)
+//   map.onClick((lat, lng) => ...)                    clicks on the map
+//   map.setView([lat, lng], zoom)
+
 // Center of D.C., used when there is nothing else to center the map on
 const DEFAULT_MAP_CENTER = [38.9072, -77.0369];
 
-function makeMap(elementId, center = DEFAULT_MAP_CENTER, zoom = 12) {
-  const map = L.map(elementId).setView(center, zoom);
+// Pins zoom in this far at most, so a single pin does not end up at street level
+const MAX_FIT_ZOOM = 14;
+
+let mapLibraryPromise = null;
+
+// Loads Google Maps or Leaflet once per page, resolves to 'google' or 'leaflet'
+function loadMapLibrary() {
+  if (mapLibraryPromise) return mapLibraryPromise;
+  mapLibraryPromise = (async () => {
+    let config = {};
+    try {
+      config = await (await fetch('/api/maps-config')).json();
+    } catch (error) {
+      // No server (Live Server), use OpenStreetMap
+    }
+
+    if (config.googleMapsKey) {
+      await new Promise((resolve, reject) => {
+        window.__hokieMapsReady = resolve;
+        const script = document.createElement('script');
+        script.src = 'https://maps.googleapis.com/maps/api/js?' + new URLSearchParams({
+          key: config.googleMapsKey, v: 'weekly', libraries: 'marker', loading: 'async', callback: '__hokieMapsReady'
+        });
+        script.onerror = () => reject(new Error('Google Maps could not load'));
+        document.head.appendChild(script);
+      });
+      window.__hokieMapId = config.googleMapsMapId;
+      return 'google';
+    }
+
+    // Leaflet's stylesheet and script are only added when they are needed
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+    document.head.appendChild(css);
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+      script.onload = resolve;
+      script.onerror = () => reject(new Error('Map could not load'));
+      document.head.appendChild(script);
+    });
+    return 'leaflet';
+  })();
+  return mapLibraryPromise;
+}
+
+// options: { center: [lat, lng], zoom, picker }
+// picker: true for the create page, so scrolling over the map zooms it instead of scrolling the page
+async function createMap(elementId, { center = DEFAULT_MAP_CENTER, zoom = 12, picker = false } = {}) {
+  const library = await loadMapLibrary();
+  return library === 'google'
+    ? createGoogleMap(elementId, center, zoom, picker)
+    : createLeafletMap(elementId, center, zoom);
+}
+
+function createGoogleMap(elementId, center, zoom, picker) {
+  const toLatLng = ([lat, lng]) => ({ lat, lng });
+  const map = new google.maps.Map(document.getElementById(elementId), {
+    center: toLatLng(center),
+    zoom,
+    mapId: window.__hokieMapId,
+    // On lists, scrolling the page should not get stuck zooming the map
+    gestureHandling: picker ? 'greedy' : 'cooperative',
+    // Clicking a shop or park on the picker should drop the pin, not open Google's info box
+    clickableIcons: !picker,
+    streetViewControl: false,
+    mapTypeControl: false,
+    fullscreenControl: false
+  });
+  const infoWindow = new google.maps.InfoWindow();
+  let pins = [];
+  let draggablePin = null;
+
+  return {
+    setPins(items) {
+      pins.forEach((pin) => { pin.map = null; });
+      pins = items.map(({ point, popupHtml }) => {
+        const pin = new google.maps.marker.AdvancedMarkerElement({ map, position: toLatLng(point), gmpClickable: true });
+        pin.addEventListener('gmp-click', () => {
+          infoWindow.setContent(popupHtml);
+          infoWindow.open({ map, anchor: pin });
+        });
+        return pin;
+      });
+      if (items.length === 1) {
+        map.setCenter(toLatLng(items[0].point));
+        map.setZoom(MAX_FIT_ZOOM);
+      } else if (items.length > 1) {
+        const bounds = new google.maps.LatLngBounds();
+        items.forEach(({ point }) => bounds.extend(toLatLng(point)));
+        map.fitBounds(bounds, 40);
+        google.maps.event.addListenerOnce(map, 'idle', () => {
+          if (map.getZoom() > MAX_FIT_ZOOM) map.setZoom(MAX_FIT_ZOOM);
+        });
+      }
+    },
+    setDraggablePin(point, onMove) {
+      if (!draggablePin) {
+        draggablePin = new google.maps.marker.AdvancedMarkerElement({ map, gmpDraggable: true });
+        draggablePin.addListener('dragend', () => {
+          // position can be a LatLng or a plain {lat, lng}
+          const position = draggablePin.position;
+          const lat = typeof position.lat === 'function' ? position.lat() : position.lat;
+          const lng = typeof position.lng === 'function' ? position.lng() : position.lng;
+          onMove(lat, lng);
+        });
+      }
+      draggablePin.position = toLatLng(point);
+    },
+    onClick(handler) {
+      map.addListener('click', (event) => handler(event.latLng.lat(), event.latLng.lng()));
+    },
+    setView(point, newZoom) {
+      map.setCenter(toLatLng(point));
+      map.setZoom(newZoom);
+    }
+  };
+}
+
+function createLeafletMap(elementId, center, zoom) {
+  // zoomSnap and wheelPxPerZoomLevel make scroll zooming finer than whole zoom levels
+  const map = L.map(elementId, { zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 120 }).setView(center, zoom);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(map);
-  return map;
+  const pinLayer = L.layerGroup().addTo(map);
+  let draggablePin = null;
+
+  return {
+    setPins(items) {
+      pinLayer.clearLayers();
+      items.forEach(({ point, popupHtml }) => L.marker(point).bindPopup(popupHtml).addTo(pinLayer));
+      if (items.length === 1) {
+        map.setView(items[0].point, MAX_FIT_ZOOM);
+      } else if (items.length > 1) {
+        map.fitBounds(items.map((item) => item.point), { padding: [30, 30], maxZoom: MAX_FIT_ZOOM });
+      }
+    },
+    setDraggablePin(point, onMove) {
+      if (!draggablePin) {
+        draggablePin = L.marker(point, { draggable: true }).addTo(map);
+        draggablePin.on('dragend', () => {
+          const position = draggablePin.getLatLng();
+          onMove(position.lat, position.lng);
+        });
+      }
+      draggablePin.setLatLng(point);
+    },
+    onClick(handler) {
+      map.on('click', (event) => handler(event.latlng.lat, event.latlng.lng));
+    },
+    setView(point, newZoom) {
+      map.setView(point, newZoom);
+    }
+  };
 }
 
 // Text typed by users has to be escaped before it goes into HTML

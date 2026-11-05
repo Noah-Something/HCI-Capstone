@@ -1,5 +1,5 @@
 // ===== HokieConnect – Events tab code =====
-// Uses loadEvents, loadEventOptions, makeMap, escapeEventHtml, formatShortTime and formatDistance from events.js
+// Uses loadEvents, loadEventOptions, createMap, escapeEventHtml, formatShortTime and formatDistance from events.js
 
 if (!sessionStorage.getItem('authToken')) {
   window.location.href = 'index.html';
@@ -9,8 +9,7 @@ const eventResults = document.getElementById('eventResults');
 const eventResultCount = document.getElementById('eventResultCount');
 
 // One map for the page, its pins are replaced every time the filters change
-const eventsMap = makeMap('eventsMap');
-const pinLayer = L.layerGroup().addTo(eventsMap);
+const eventsMapReady = createMap('eventsMap');
 
 function makeEventResultCard(event) {
   const details = [formatShortTime(event.startsAt), escapeEventHtml(event.location), formatDistance(event.distanceMiles)]
@@ -37,22 +36,18 @@ function makeEventResultCard(event) {
 }
 
 // Put a pin on the map for every event that has coordinates, and zoom to fit them
-function showEventPins(events) {
-  pinLayer.clearLayers();
-  const points = [];
-  for (const event of events) {
-    if (event.latitude === null || event.latitude === undefined) continue;
-    const point = [event.latitude, event.longitude];
-    points.push(point);
-    L.marker(point)
-      .bindPopup(`<b><a href="event.html?id=${event.id}">${escapeEventHtml(event.title)}</a></b><br>
-                  ${formatShortTime(event.startsAt)} · ${escapeEventHtml(event.location)}`)
-      .addTo(pinLayer);
-  }
-  if (points.length === 1) {
-    eventsMap.setView(points[0], 14);
-  } else if (points.length > 1) {
-    eventsMap.fitBounds(points, { padding: [30, 30], maxZoom: 14 });
+async function showEventPins(events) {
+  try {
+    const map = await eventsMapReady;
+    map.setPins(events
+      .filter((event) => event.latitude !== null && event.latitude !== undefined)
+      .map((event) => ({
+        point: [event.latitude, event.longitude],
+        popupHtml: `<b><a href="event.html?id=${event.id}">${escapeEventHtml(event.title)}</a></b><br>
+                    ${formatShortTime(event.startsAt)} · ${escapeEventHtml(event.location)}`
+      })));
+  } catch (error) {
+    document.getElementById('eventsMap').hidden = true;
   }
 }
 

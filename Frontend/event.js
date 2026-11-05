@@ -47,8 +47,12 @@ async function showEventPage() {
   if (selectedEvent.latitude !== null && selectedEvent.latitude !== undefined) {
     document.getElementById('eventMapBox').hidden = false;
     const point = [selectedEvent.latitude, selectedEvent.longitude];
-    const map = makeMap('eventMap', point, 15);
-    L.marker(point).addTo(map);
+    createMap('eventMap', { center: point, zoom: 15 })
+      .then((map) => {
+        map.setPins([{ point, popupHtml: `<b>${escapeEventHtml(selectedEvent.location)}</b>` }]);
+        map.setView(point, 15);
+      })
+      .catch(() => { document.getElementById('eventMap').hidden = true; });
     document.getElementById('directionsLink').href =
       `https://www.google.com/maps/dir/?api=1&destination=${selectedEvent.latitude},${selectedEvent.longitude}`;
   }
