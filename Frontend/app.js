@@ -3,17 +3,20 @@
 if (!sessionStorage.getItem('authToken')) {
   window.location.href = 'index.html';
 }
-// the events list now comes from events.js
+
+// Events come from the server (/api/events), or from SAMPLE_EVENTS on Live Server (see events.js)
+let events = [];
+
 function makeEventCard(event) {
-    return `
-    <a href = "event.html?id=${event.id}" class="card event-card">
-        <div class = "event-top">${event.category}</div>
-        <div class = "event-info">
-            <h3 style="margin-top:0 6px">${event.title}</h3>
-            <p class ="gray" style ="margin: 0 0 8px">${event.when} · ${event.where}</p>
-            <span class ="going">${event.going} Hokies going</span>
-        </div>
-    </a>`
+  return `
+    <a href="event.html?id=${event.id}" class="card event-card">
+      <div class="event-top">${escapeHtml(event.category)}</div>
+      <div class="event-info">
+        <h3 style="margin:0 0 6px">${escapeHtml(event.title)}</h3>
+        <p class="gray" style="margin:0 0 8px">${formatShortTime(event.startsAt)} · ${escapeHtml(event.location)}</p>
+        <span class="going">${event.goingCount} Hokies going</span>
+      </div>
+    </a>`;
 }
 
 function showEvents(category) {
@@ -24,7 +27,7 @@ function showEvents(category) {
       html += makeEventCard(event);
     }
   }
-  list.innerHTML = html;
+  list.innerHTML = html || '<p class="gray">No events here yet.</p>';
 }
 
 const filterButtons = document.querySelectorAll('.filter');
@@ -36,8 +39,11 @@ for (const button of filterButtons) {
   });
 }
 
-
-showEvents('All');
+// Load the events, then show them all
+loadEvents().then((list) => {
+  events = list;
+  showEvents('All');
+});
 
 // ===== "Your first connection" card =====
 // Hokies within this many miles count as "near you"
