@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HokieConnect: Login</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h2> Log into HokieConnect </h2>
+
+    <!-- Create form -->
+    <form id="loginForm">
+        <input type="text" id="username" placeholder="Username" required />
+        <input type="password" id="password" placeholder="Password" required />
+        <button type="submit" id="loginButton">Log In</button>
+    </form>
+
+    <button type="button" onclick="window.location.href='index.html'"
+        style="margin-top: 10px;">
+        Back to Home
+    </button>
+
+    <p id="loginStatus" role="status" aria-live="polite"></p>
+
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const loginStatus = document.getElementById('loginStatus');
+        const loginButton = document.getElementById('loginButton');
+
+        loginForm.addEventListener('submit', async(e) => {
+            e.preventDefault();
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            loginStatus.textContent = "Logging in..."
+            loginButton.disabled = true;
+
+            try {
+                // Get response from node server.js
+                const response = await fetch('http://localhost:3000/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    if (data.token) {
+                        sessionStorage.setItem('authToken', data.token);
+                    }
+                    loginStatus.textContent = 'Successful Login';
+                    loginStatus.style.color = 'green';
+                } else {
+                    loginStatus.textContent = 
+                        data.message || `Login failed`;
+                    loginStatus.style.color = 'red';
+                }
+            
+            } catch (error) {
+                console.error('Network error:', error);
+                loginStatus.textContent = 'Could not connect to login server (Check Console)'
+                loginStatus.style.color = 'red';
+            } finally {
+                loginButton.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

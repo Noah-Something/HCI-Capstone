@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HokieConnect – Hokies near you</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=DM+Sans:wght@400;700&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <script src="motion.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="home.html" class="logo">HokieConnect</a>
+    <div class="nav-links">
+      <a href="home.html">Discover</a>
+      <a href="events.html">Events</a>
+      <a href="hokies.html" class="active">Hokies</a>
+      <a href="groups.html">Groups</a>
+      <a href="messages.html">Messages</a>
+      <a href="profile.html">Profile</a>
+    </div>
+  </nav>
+
+  <div class="page">
+    <h1>Hokies near you</h1>
+    <p class="gray">Find fellow Virginia Tech alumni in the area. Your best matches share your interests and wellness preferences and live close by.</p>
+
+    <!-- Shown when the viewer's own profile is missing things that improve their matches -->
+    <div id="profileTip" class="card tip-card" hidden></div>
+
+    <!-- Filters -->
+    <div class="hokie-filters">
+      <label>Distance
+        <select id="distanceFilter" class="input">
+          <option value="">Any distance</option>
+          <option value="2">Within 2 miles</option>
+          <option value="5">Within 5 miles</option>
+          <option value="10">Within 10 miles</option>
+          <option value="25">Within 25 miles</option>
+        </select>
+      </label>
+      <label>Interest
+        <select id="interestFilter" class="input">
+          <option value="">Any interest</option>
+        </select>
+      </label>
+      <label>Wellness
+        <select id="wellnessFilter" class="input">
+          <option value="">Any wellness preference</option>
+        </select>
+      </label>
+      <label>Class year
+        <input id="gradYearFilter" class="input" type="number" min="1872" placeholder="Any year">
+      </label>
+    </div>
+
+    <p id="resultCount" class="gray"></p>
+    <div id="hokieList" class="event-grid"></div>
+  </div>
+
+  <script>
+    const token = sessionStorage.getItem('authToken');
+    if (!token) {
+      window.location.href = 'index.html';
+    }
+
+    const hokieList = document.getElementById('hokieList');
+    const resultCount = document.getElementById('resultCount');
+    let scoreWeights = {};
+
+    // Names and bios are typed by users, so escape them before putting them in the page
+    const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[char]);
+
+    // Sends the login token with every request, goes back to sign in if the session is no longer valid
+    const apiRequest = async (url) => {
+      const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (response.status === 401) {
+        sessionStorage.removeItem('authToken');
+        window.location.href = 'index.html';
+      }
+      return response;
+    };
+
+    const formatDistance = (miles) => {
+      if (miles === null) return '';
+      return miles < 1 ? 'Less than 1 mi away' : `${Math.round(miles)} mi away`;
+    };
+
+    // Shared items are highlighted so it is clear why two Hokies matched
+    const makeChips = (items, shared) => items
+      .map((item) => `<span class="chip${shared.includes(item) ? ' chip-shared' : ''}">${escapeHtml(item)}</span>`)
+      .join('');
+
+    // Links to their other profiles. The server builds every link, so they only point at the real platform.
+    // Discord has no profile links, so clicking it copies the username instead
+    const makeSocialLinks = (links) => (links || []).map((link) => link.url
+      ? `<a class="social-link" href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer nofollow"
+            title="${escapeHtml(link.label)}: ${escapeHtml(link.handle)}">${escapeHtml(link.label)} ↗</a>`
+      : `<button type="button" class="social-link copy-handle" data-handle="${escapeHtml(link.handle)}"
+            title="Copy ${escapeHtml(link.label)} username">${escapeHtml(link.label)}: ${escapeHtml(link.handle)}</button>`
+    ).join('');
+
+    const makeHokieCard = (hokie) => {
+      const details = [
+        hokie.gradYear ? `Class of ${hokie.gradYear}` : '',
+        escapeHtml(hokie.neighborhood),
+        formatDistance(hokie.distanceMiles)
+      ].filter(Boolean).join(' · ');
+
+      const breakdown = [
+        ['Interests', 'interests'], ['Wellness', 'wellness'], ['Distance', 'distance'], ['Class year', 'gradYear']
+      ].map(([label, key]) => `${label} ${hokie.breakdown[key]}/${scoreWeights[key]}`).join(' · ');
+
+      return `
+        <div class="card hokie-card">
+          <div class="hokie-header">
+            <div>
+              <h3 style="margin:0">${escapeHtml(hokie.displayName)}</h3>
+              <p class="gray" style="margin:4px 0 0">@${escapeHtml(hokie.username)}</p>
+            </div>
+            <span class="match-score">${hokie.score}% match</span>
+          </div>
+          ${details ? `<p class="gray">${details}</p>` : ''}
+          ${hokie.bio ? `<p>${escapeHtml(hokie.bio)}</p>` : ''}
+          ${hokie.interests.length ? `<p class="chip-label">Interests</p><div class="chips">${makeChips(hokie.interests, hokie.sharedInterests)}</div>` : ''}
+          ${hokie.wellnessPreferences.length ? `<p class="chip-label">Wellness</p><div class="chips">${makeChips(hokie.wellnessPreferences, hokie.sharedWellness)}</div>` : ''}
+          ${hokie.socialLinks && hokie.socialLinks.length ? `<p class="chip-label">Find them on</p><div class="social-links">${makeSocialLinks(hokie.socialLinks)}</div>` : ''}
+          <div class="hokie-actions">
+            <a href="messages.html?user=${encodeURIComponent(hokie.username)}" class="btn btn-maroon">Message</a>
+          </div>
+          <p class="score-breakdown">${breakdown}</p>
+        </div>`;
+    };
+
+    const showProfileTip = (viewer) => {
+      const missing = [];
+      if (!viewer.hasLocation) missing.push('your location');
+      if (!viewer.hasInterests) missing.push('your interests');
+      if (!viewer.hasWellness) missing.push('your wellness preferences');
+      if (!viewer.hasGradYear) missing.push('your class year');
+
+      const tip = document.getElementById('profileTip');
+      tip.hidden = missing.length === 0;
+      if (missing.length) {
+        tip.innerHTML = `Add ${missing.join(', ')} to <a href="profile.html"><b>your profile</b></a> to get better matches.`;
+      }
+    };
+
+    const loadHokies = async () => {
+      const params = new URLSearchParams();
+      const filters = {
+        maxDistance: document.getElementById('distanceFilter').value,
+        interest: document.getElementById('interestFilter').value,
+        wellness: document.getElementById('wellnessFilter').value,
+        gradYear: document.getElementById('gradYearFilter').value
+      };
+      for (const [key, value] of Object.entries(filters)) {
+        if (value) params.set(key, value);
+      }
+
+      resultCount.textContent = 'Finding Hokies ...';
+      try {
+        const response = await apiRequest(`/api/hokies?${params}`);
+        if (!response.ok) throw new Error('Load failed');
+        const data = await response.json();
+
+        showProfileTip(data.viewer);
+        resultCount.textContent = data.hokies.length === 1 ? '1 Hokie found' : `${data.hokies.length} Hokies found`;
+        hokieList.innerHTML = data.hokies.length
+          ? data.hokies.map(makeHokieCard).join('')
+          : '<p class="gray">No Hokies match these filters yet. Try widening your search.</p>';
+      } catch (error) {
+        resultCount.textContent = 'Could not load Hokies. Is server.js running?';
+        hokieList.innerHTML = '';
+      }
+    };
+
+    const loadFilters = async () => {
+      const response = await fetch('/api/profile/options');
+      const options = await response.json();
+      scoreWeights = options.scoreWeights;
+
+      const addOptions = (selectId, values) => {
+        for (const value of values) {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = value;
+          document.getElementById(selectId).appendChild(option);
+        }
+      };
+      addOptions('interestFilter', options.interests);
+      addOptions('wellnessFilter', options.wellnessPreferences);
+    };
+
+    for (const id of ['distanceFilter', 'interestFilter', 'wellnessFilter']) {
+      document.getElementById(id).addEventListener('change', loadHokies);
+    }
+    // Wait until the user stops typing a year before searching
+    let typingTimer;
+    document.getElementById('gradYearFilter').addEventListener('input', () => {
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(loadHokies, 400);
+    });
+
+    // Copy a Discord username when its button is clicked
+    hokieList.addEventListener('click', async (click) => {
+      const button = click.target.closest('.copy-handle');
+      if (!button) return;
+      const original = button.textContent;
+      try {
+        await navigator.clipboard.writeText(button.dataset.handle);
+        button.textContent = 'Copied!';
+      } catch (error) {
+        // Clipboard can be blocked (for example on http pages), show the name so it can be copied by hand
+        button.textContent = button.dataset.handle;
+      }
+      setTimeout(() => { button.textContent = original; }, 1500);
+    });
+
+    loadFilters().then(loadHokies).catch(() => {
+      resultCount.textContent = 'Could not load Hokies. Is server.js running?';
+    });
+  </script>
+
+</body>
+</html>

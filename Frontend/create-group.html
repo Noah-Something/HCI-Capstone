@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HokieConnect – Create group</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=DM+Sans:wght@400;700&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <script src="motion.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="home.html" class="logo">HokieConnect</a>
+    <div class="nav-links">
+      <a href="home.html">Discover</a>
+      <a href="events.html">Events</a>
+      <a href="hokies.html">Hokies</a>
+      <a href="groups.html" class="active">Groups</a>
+      <a href="messages.html">Messages</a>
+      <a href="profile.html">Profile</a>
+    </div>
+  </nav>
+
+  <div class="page profile-page">
+    <a href="groups.html"><b>← Back to Groups</b></a>
+    <h1 style="margin-top:12px">Create a group</h1>
+    <p class="gray">You will be the group's admin, so you can host events on its behalf and make other members admins too.</p>
+
+    <form id="groupForm" class="card profile-section">
+      <label for="groupName">Group name</label>
+      <input id="groupName" class="input" type="text" minlength="3" maxlength="100" placeholder="DC Hokie Runners" required>
+
+      <label for="groupCategory">Category</label>
+      <select id="groupCategory" class="input" required>
+        <option value="">Choose a category</option>
+      </select>
+
+      <label for="groupDescription">Description</label>
+      <textarea id="groupDescription" class="input" rows="4" maxlength="1000"
+                placeholder="Who is the group for, and what do you do together?"></textarea>
+
+      <button type="submit" id="createGroupButton" class="btn btn-maroon">Create group</button>
+      <p id="createGroupStatus"></p>
+    </form>
+  </div>
+
+  <script src="events.js"></script>
+  <script src="groups.js"></script>
+  <script>
+    if (!sessionStorage.getItem('authToken')) {
+      window.location.href = 'index.html';
+    }
+
+    const formStatus = document.getElementById('createGroupStatus');
+
+    loadGroupCategories().then((categories) => {
+      for (const category of categories) {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        document.getElementById('groupCategory').appendChild(option);
+      }
+    });
+
+    document.getElementById('groupForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = document.getElementById('createGroupButton');
+      button.disabled = true;
+      formStatus.textContent = 'Creating group ...';
+      formStatus.style.color = '';
+
+      const result = await createGroup({
+        name: document.getElementById('groupName').value.trim(),
+        category: document.getElementById('groupCategory').value,
+        description: document.getElementById('groupDescription').value.trim()
+      });
+      if (result.ok) {
+        window.location.href = `group.html?id=${result.id}`;
+      } else {
+        formStatus.textContent = result.message || 'Could not create the group.';
+        formStatus.style.color = 'red';
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

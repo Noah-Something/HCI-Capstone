@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HokieConnect – Events</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=DM+Sans:wght@400;700&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <script src="motion.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="home.html" class="logo">HokieConnect</a>
+    <div class="nav-links">
+      <a href="home.html">Discover</a>
+      <a href="events.html" class="active">Events</a>
+      <a href="hokies.html">Hokies</a>
+      <a href="groups.html">Groups</a>
+      <a href="messages.html">Messages</a>
+      <a href="profile.html">Profile</a>
+    </div>
+  </nav>
+
+  <div class="page">
+    <div class="events-header">
+      <div>
+        <h1>Events</h1>
+        <p class="gray">Find Hokie meetups around D.C., or host your own.</p>
+      </div>
+      <a href="create-event.html" class="btn btn-maroon">+ Create event</a>
+    </div>
+
+    <!-- Filters -->
+    <div class="event-filters">
+      <label>Search
+        <input id="searchFilter" class="input" type="search" placeholder="Title, place or description">
+      </label>
+      <label>When
+        <select id="whenFilter" class="input">
+          <option value="upcoming">Upcoming</option>
+          <option value="week">Next 7 days</option>
+          <option value="past">Past events</option>
+        </select>
+      </label>
+      <label>Category
+        <select id="categoryFilter" class="input">
+          <option value="">Any category</option>
+        </select>
+      </label>
+      <label>Tag
+        <input id="tagFilter" class="input" type="text" list="tagSuggestions" placeholder="Any tag">
+        <datalist id="tagSuggestions"></datalist>
+      </label>
+      <label>Distance
+        <select id="distanceFilter" class="input">
+          <option value="">Any distance</option>
+          <option value="2">Within 2 miles</option>
+          <option value="5">Within 5 miles</option>
+          <option value="10">Within 10 miles</option>
+          <option value="25">Within 25 miles</option>
+        </select>
+      </label>
+    </div>
+    <p id="distanceTip" class="gray" hidden>Add your location to <a href="profile.html"><b>your profile</b></a> to see how far away events are.</p>
+
+    <div id="eventsMap" class="events-map"></div>
+
+    <p id="eventResultCount" class="gray"></p>
+    <div id="eventResults" class="event-grid"></div>
+  </div>
+
+  <script src="events.js"></script>
+  <script src="events-page.js"></script>
+</body>
+</html>

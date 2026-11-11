@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HokieConnect – Group</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=DM+Sans:wght@400;700&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <script src="motion.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="home.html" class="logo">HokieConnect</a>
+    <div class="nav-links">
+      <a href="home.html">Discover</a>
+      <a href="events.html">Events</a>
+      <a href="hokies.html">Hokies</a>
+      <a href="groups.html" class="active">Groups</a>
+      <a href="messages.html">Messages</a>
+      <a href="profile.html">Profile</a>
+    </div>
+  </nav>
+
+  <div class="page">
+    <a href="groups.html"><b>← Back to Groups</b></a>
+
+    <div class="card event-detail group-detail">
+      <div class="event-top" id="groupCategory"></div>
+      <div class="event-info">
+        <h1 id="groupName">Loading…</h1>
+        <p class="gray" id="groupCounts"></p>
+        <p id="groupDescription" class="event-description"></p>
+
+        <div class="group-actions">
+          <button id="membershipButton" class="btn btn-maroon" hidden></button>
+          <!-- Only admins can host events for the group -->
+          <a id="createGroupEvent" class="btn" hidden>+ Create event for this group</a>
+        </div>
+        <p id="groupStatus"></p>
+
+        <div class="attendees">
+          <h2>Upcoming events</h2>
+          <div id="groupEvents"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Group chat on the left, everyone in the group on the right (stacked on phones) -->
+    <div class="group-chat-layout" id="groupChatLayout" hidden>
+      <div class="card group-chat-panel">
+        <h2>Group chat</h2>
+        <div id="chatLocked" class="thread-empty" hidden>
+          <p class="gray">Join this group to read and post in its chat.</p>
+        </div>
+        <div id="chatArea" class="group-chat-area" hidden>
+          <div id="chatList" class="message-list group-chat-list"></div>
+          <form id="chatForm" class="message-form">
+            <textarea id="chatInput" class="input" rows="2" maxlength="1000"
+                      placeholder="Message the group ... (Enter to send, Shift+Enter for a new line)" required></textarea>
+            <button type="submit" class="btn btn-maroon">Send</button>
+          </form>
+          <p id="chatStatus"></p>
+        </div>
+      </div>
+
+      <div class="card group-member-panel">
+        <h2>Members <span class="gray member-total" id="memberTotal"></span></h2>
+        <div id="memberList"></div>
+      </div>
+    </div>
+
+    <!-- Only the creator and admins see this -->
+    <div class="card group-roles-card" id="rolesCard" hidden>
+      <h2>Custom roles</h2>
+      <p class="gray" style="margin-top:0">Make up roles like <i>Run Leader</i> or <i>Treasurer</i>, then give them to members
+        from the <b>⋯</b> menu next to their name. Roles show on the member list and in the chat.</p>
+      <ul id="roleList" class="role-list"></ul>
+      <form id="roleForm" class="role-form">
+        <input id="roleName" class="input" maxlength="30" placeholder="New role name" required>
+        <select id="roleColor" class="input" aria-label="Role color"></select>
+        <button type="submit" class="btn btn-maroon">Add role</button>
+      </form>
+      <p id="roleStatus"></p>
+    </div>
+  </div>
+
+  <script src="events.js"></script>
+  <script src="groups.js"></script>
+  <script src="chat-media.js"></script>
+  <script src="group.js"></script>
+</body>
+</html>

@@ -1,0 +1,480 @@
+/* Colors (change these to restyle everything) */
+:root {
+  --maroon: #861F41;
+  --maroon-light: #F6E6EC;
+  --orange: #E5751F;
+  --text: #1F1A1C;
+  --gray: #6B6266;
+  --border: #ECE7E3;
+  --bg: #FBFAF8;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'DM Sans', Arial, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+h1, h2 { font-family: 'Bricolage Grotesque', Arial, sans-serif; margin: 0 0 8px; }
+/* Browsers give buttons and form fields their own system font, make them use the page's font instead
+   (this is what made the interest and wellness chips look different from the rest of the page) */
+button, input, select, textarea { font-family: inherit; }
+a { color: var(--maroon); text-decoration: none; }
+.gray { color: var(--gray); }
+
+/* Buttons and inputs */
+.btn {
+  display: inline-block;
+  padding: 12px 18px;
+  border-radius: 12px;
+  border: 1.5px solid #D9D1CC;
+  background: white;
+  color: var(--text);
+  font-weight: bold;
+  font-size: 15px;
+  cursor: pointer;
+  text-align: center;
+}
+.btn-maroon { background: var(--maroon); border-color: var(--maroon); color: white; }
+
+.input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #D9D1CC;
+  border-radius: 12px;
+  font-size: 16px;
+  margin: 6px 0 14px;
+}
+
+/* Login page */
+.login-page { display: flex; flex-wrap: wrap; min-height: 100vh; }
+.login-left {
+  flex: 1 1 400px;
+  background: var(--maroon);
+  color: white;
+  padding: 60px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.login-left h1 { font-size: 56px; line-height: 1; }
+.login-right {
+  flex: 1 1 400px;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* Top nav bar */
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 20px;
+  background: white;
+  border-bottom: 1px solid var(--border);
+}
+.logo { font-family: 'Bricolage Grotesque', Arial, sans-serif; font-weight: bold; font-size: 20px; color: var(--text); }
+.nav-links { display: flex; flex-wrap: wrap; gap: 4px; }
+.nav-links a { padding: 8px 12px; border-radius: 10px; color: var(--gray); font-weight: bold; font-size: 14px; }
+.nav-links a.active { background: var(--maroon-light); color: var(--maroon); }
+
+/*  Page layout */
+.page { max-width: 1100px; margin: 0 auto; padding: 24px 20px; }
+
+.card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+/* Two columns on laptop, one column on phone */
+.home-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+.event-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+@media (max-width: 768px) {
+  .home-layout, .event-grid { grid-template-columns: 1fr; }
+  .login-left h1 { font-size: 40px; }
+}
+
+/* Filter buttons */
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.filter {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1.5px solid #D9D1CC;
+  background: white;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+}
+.filter.active { background: var(--text); color: white; border-color: var(--text); }
+
+/* Event card */
+.event-card { display: block; color: var(--text); padding: 0; overflow: hidden; }
+.event-top { background: var(--maroon-light); padding: 14px; font-weight: bold; color: var(--maroon); }
+.event-info { padding: 14px; }
+.going { color: var(--maroon); font-weight: bold; font-size: 14px; }
+
+/* "Coming soon" pages */
+.coming-soon { text-align: center; padding: 50px 20px; }
+.tag { background: var(--maroon-light); color: var(--maroon); padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: bold; }
+
+/* Profile page */
+.profile-page { max-width: 720px; }
+.profile-section { margin-bottom: 16px; }
+.section-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+.section-header h2 { margin: 0; }
+.visibility-select { padding: 6px 10px; border: 1px solid #D9D1CC; border-radius: 10px; font-size: 14px; background: white; }
+textarea.input { font-family: inherit; resize: vertical; }
+#logoutButton { margin-top: 8px; }
+.location-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Hokies page */
+.tip-card { background: var(--maroon-light); border-color: var(--maroon-light); margin-bottom: 16px; }
+.hokie-filters { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0 4px; }
+.hokie-filters label { font-weight: bold; font-size: 14px; }
+@media (max-width: 800px) { .hokie-filters { grid-template-columns: 1fr 1fr; } }
+.hokie-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.match-score { background: var(--maroon); color: white; padding: 6px 12px; border-radius: 999px; font-weight: bold; font-size: 14px; white-space: nowrap; }
+.chip-label { font-weight: bold; font-size: 13px; margin: 12px 0 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { padding: 4px 10px; border-radius: 999px; border: 1px solid #D9D1CC; font-size: 13px; }
+.chip-shared { background: var(--maroon-light); border-color: var(--maroon); color: var(--maroon); font-weight: bold; }
+.score-breakdown { color: var(--gray); font-size: 12px; margin: 14px 0 0; border-top: 1px solid var(--border); padding-top: 10px; }
+
+/* Home page "Your first connection" card */
+.connection-card { display: block; background: var(--maroon); border-color: var(--maroon); color: white; margin-bottom: 14px; }
+.connection-label { margin: 0 0 6px; font-size: 13px; font-weight: bold; letter-spacing: 0.5px; opacity: 0.85; }
+.connection-match { background: rgba(255, 255, 255, 0.12); border-radius: 12px; padding: 12px; margin: 10px 0; }
+.connection-match-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.connection-score { background: white; color: var(--maroon); padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: bold; white-space: nowrap; }
+.connection-detail { margin: 6px 0 0; font-size: 14px; opacity: 0.9; }
+.connection-action { margin: 0; font-weight: bold; }
+
+/* Messages page */
+.messages-layout { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; margin-top: 12px; }
+.conversation-panel { padding: 8px; max-height: 70vh; overflow-y: auto; }
+.conversation { display: block; width: 100%; text-align: left; background: none; border: none; border-radius: 12px; padding: 10px; cursor: pointer; font: inherit; color: var(--text); }
+.conversation:hover { background: var(--bg); }
+.conversation.active { background: var(--maroon-light); }
+.conversation-top, .conversation-bottom { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.conversation-time { font-size: 12px; white-space: nowrap; }
+.conversation-preview { color: var(--gray); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.conversation-preview.unread { color: var(--text); font-weight: bold; }
+.unread-badge { background: var(--maroon); color: white; border-radius: 999px; font-size: 12px; font-weight: bold; padding: 1px 8px; }
+.thread-panel { display: flex; flex-direction: column; min-height: 60vh; }
+.thread-empty { margin: auto; text-align: center; padding: 40px 20px; }
+#thread { display: flex; flex-direction: column; flex: 1; }
+#thread[hidden] { display: none; }
+.thread-header { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.back-button { display: none; padding: 6px 12px; }
+.message-list { flex: 1; overflow-y: auto; max-height: 55vh; padding: 12px 0; display: flex; flex-direction: column; gap: 10px; }
+.thread-start { text-align: center; margin: auto; }
+.message { display: flex; flex-direction: column; max-width: 75%; }
+.message.mine { align-self: flex-end; align-items: flex-end; }
+.message.theirs { align-self: flex-start; align-items: flex-start; }
+.bubble { padding: 10px 14px; border-radius: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.mine .bubble { background: var(--maroon); color: white; border-bottom-right-radius: 4px; }
+.theirs .bubble { background: var(--bg); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.message-time { color: var(--gray); font-size: 12px; margin-top: 3px; }
+.message-form { display: flex; gap: 8px; align-items: flex-end; border-top: 1px solid var(--border); padding-top: 12px; }
+.message-form .input { margin: 0; font-family: inherit; resize: none; }
+.message-form[hidden] { display: none; }
+
+/* Phones: show the list or the open conversation, not both */
+@media (max-width: 800px) {
+  .messages-layout { grid-template-columns: 1fr; }
+  .messages-layout.showing-thread .conversation-panel { display: none; }
+  .messages-layout:not(.showing-thread) .thread-panel { display: none; }
+  .back-button { display: inline-block; }
+}
+
+/* Message button on Hokies cards */
+.hokie-actions { margin-top: 12px; }
+
+
+/* ---------- Event details page ---------- */
+.event-detail { max-width: 700px; margin-top: 16px; padding: 0; overflow: hidden; }
+.event-detail h1 { font-size: 28px; }
+.tip { background: #FFF4EA; color: #4A2A0F; padding: 12px; border-radius: 12px; }
+.btn-going { background: var(--maroon-light); color: var(--maroon); border-color: var(--maroon); }
+
+/* Events tab */
+.events-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.event-filters { display: grid; grid-template-columns: 2fr repeat(4, 1fr); gap: 12px; margin: 16px 0 4px; }
+.event-filters label { font-weight: bold; font-size: 14px; }
+@media (max-width: 800px) { .event-filters { grid-template-columns: 1fr 1fr; } }
+.events-map { height: 320px; border-radius: 16px; border: 1px solid var(--border); margin: 8px 0 16px; z-index: 0; }
+.event-card-image { display: block; width: 100%; height: 160px; object-fit: cover; }
+.event-host { font-size: 14px; margin: 0 0 8px; }
+
+/* Event details page additions */
+.event-detail-image { display: block; width: 100%; max-height: 360px; object-fit: cover; }
+.event-description { white-space: pre-wrap; }
+.event-detail-map { height: 240px; border-radius: 12px; border: 1px solid var(--border); margin: 16px 0 8px; z-index: 0; }
+.delete-button { display: block; margin-top: 20px; color: #B3261E; border-color: #E8B4B0; }
+
+/* Create event page */
+.picker-map { height: 340px; border-radius: 12px; border: 1px solid var(--border); cursor: crosshair; z-index: 0; }
+.host-choice { display: flex; flex-wrap: wrap; gap: 16px; margin: 6px 0 14px; }
+.host-choice label { font-weight: normal; }
+.time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 600px) { .time-row { grid-template-columns: 1fr; } }
+.tag-remove { cursor: pointer; font: inherit; font-size: 13px; }
+.image-preview { display: block; max-width: 100%; max-height: 260px; border-radius: 12px; margin: 12px 0 8px; }
+
+
+/* Let filter boxes shrink on narrow screens instead of pushing the page wider than the phone */
+.event-filters > label, .hokie-filters > label { min-width: 0; }
+@media (max-width: 500px) { .event-filters, .hokie-filters { grid-template-columns: 1fr; } }
+.events-header { margin-bottom: 8px; }
+.events-header > h2 { margin: 0; }
+
+/* Event page: when, where and who is going */
+.event-when { font-weight: bold; margin: 0 0 4px; }
+.event-where { color: var(--gray); margin: 0 0 8px; }
+.attendees { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px; }
+.attendees h2 { font-size: 20px; }
+.attendee-list { list-style: none; margin: 0; padding: 0; max-height: 360px; overflow-y: auto; }
+.attendee { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.attendee:last-child { border-bottom: none; }
+.attendee-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--maroon-light); color: var(--maroon); display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+.attendee-name { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.attendee-message { padding: 6px 12px; font-size: 14px; }
+
+/* Discover page: why an event was recommended */
+.recommend-reason { color: var(--maroon); font-size: 13px; margin: 0 0 8px; }
+
+/* Events tab cards: the link fills the card, the map button sits at the bottom */
+.event-card { display: flex; flex-direction: column; }
+.event-card-link { display: block; color: inherit; flex: 1; }
+.event-card-actions { padding: 0 14px 14px; }
+.show-on-map { padding: 6px 12px; font-size: 14px; cursor: pointer; }
+
+/* Social links: profile page boxes and Hokies card buttons */
+.social-inputs label { display: block; font-weight: bold; font-size: 14px; }
+.social-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.social-link { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--maroon); color: var(--maroon); background: white; font: inherit; font-size: 13px; font-weight: bold; cursor: pointer; }
+.social-link:hover { background: var(--maroon-light); }
+
+/* Groups */
+.group-filters { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin: 4px 0; }
+.group-filters > label { font-weight: bold; font-size: 14px; min-width: 0; }
+@media (max-width: 500px) { .group-filters { grid-template-columns: 1fr; } }
+.group-description { margin: 0 0 8px; color: var(--text); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.group-role { font-weight: bold; color: var(--maroon); font-size: 14px; }
+.group-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+.group-event { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; border-bottom: 1px solid var(--border); color: var(--text); }
+.group-event:last-child { border-bottom: none; }
+.role-badge { background: var(--maroon-light); color: var(--maroon); font-size: 12px; font-weight: bold; padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
+.attendee .attendee-message + .attendee-message { margin-left: 4px; }
+
+/* Group chat and member list (group.html) */
+.event-detail.group-detail { max-width: none; } /* Same width as the chat and roles cards below it */
+.group-chat-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-top: 16px; align-items: start; }
+.group-chat-layout[hidden] { display: none; }
+.group-chat-layout > .card { min-width: 0; }
+.group-chat-panel { display: flex; flex-direction: column; min-height: 420px; }
+.group-chat-area { display: flex; flex-direction: column; flex: 1; }
+.group-chat-area[hidden] { display: none; }
+.group-chat-list { min-height: 300px; max-height: 60vh; }
+.group-chat-list .message { gap: 0; }
+.group-chat-list .message:not(.run-start) { margin-top: -6px; }
+.chat-sender { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 14px; margin: 0 0 4px 4px; }
+.chat-sender .role-badge { margin-left: 2px; font-size: 11px; padding: 1px 6px; }
+.link-button { background: none; border: none; padding: 0; color: var(--gray); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
+.link-button:hover { color: var(--maroon); }
+
+.group-member-panel { max-height: 80vh; overflow-y: auto; }
+.member-total { font-size: 16px; font-weight: normal; }
+.member-section-title { font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: .04em; color: var(--gray); margin: 14px 0 4px; }
+.group-member-list { list-style: none; margin: 0; padding: 0; }
+.group-member { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.group-member:last-child { border-bottom: none; }
+.group-member-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.group-member-name { overflow-wrap: anywhere; }
+.group-member-sub { font-size: 13px; }
+.role-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.role-badges:empty { display: none; }
+.role-badges .role-badge { margin-left: 0; }
+
+/* The ⋯ menu next to each member */
+.member-menu { position: relative; flex-shrink: 0; }
+.member-menu summary { list-style: none; cursor: pointer; padding: 2px 10px; border-radius: 8px; border: 1.5px solid #D9D1CC; font-weight: bold; background: white; user-select: none; }
+.member-menu summary::-webkit-details-marker { display: none; }
+.member-menu[open] summary { background: var(--maroon-light); border-color: var(--maroon); }
+.member-menu-body { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; width: 220px; background: white; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 6px; }
+.member-menu-item { display: block; width: 100%; text-align: left; background: none; border: none; border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 14px; color: var(--text); cursor: pointer; }
+.member-menu-item:hover { background: var(--bg); }
+.member-menu-label { font-size: 12px; font-weight: bold; text-transform: uppercase; color: var(--gray); padding: 8px 10px 2px; border-top: 1px solid var(--border); margin-top: 4px; }
+.member-menu-check { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+.member-menu-check:hover { background: var(--bg); }
+.member-menu-note { font-size: 13px; padding: 6px 10px; margin: 0; }
+
+/* Custom roles card */
+.group-roles-card { margin-top: 16px; }
+.role-list { list-style: none; margin: 0 0 12px; padding: 0; }
+.role-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.role-row .role-badge { margin-left: 0; font-size: 13px; }
+.role-count { font-size: 13px; flex: 1; min-width: 70px; }
+.role-row .input, .role-form .input { margin: 0; width: auto; padding: 6px 10px; }
+.role-form { display: flex; flex-wrap: wrap; gap: 8px; }
+.role-form #roleName { flex: 1; min-width: 160px; }
+
+/* Role colors, used by badges (role-color-*) and by names in the member list and chat (role-text-*) */
+.role-color-maroon { --role: #861F41; }
+.role-color-orange { --role: #C2581A; }
+.role-color-gold   { --role: #8A6A00; }
+.role-color-green  { --role: #2E7D32; }
+.role-color-teal   { --role: #00796B; }
+.role-color-blue   { --role: #1F5FAD; }
+.role-color-purple { --role: #6A3D9A; }
+.role-color-gray   { --role: #5F6368; }
+.role-badge[class*="role-color-"] { color: var(--role); background: color-mix(in srgb, var(--role) 12%, white); }
+.role-text-maroon { color: #861F41; }
+.role-text-orange { color: #C2581A; }
+.role-text-gold   { color: #8A6A00; }
+.role-text-green  { color: #2E7D32; }
+.role-text-teal   { color: #00796B; }
+.role-text-blue   { color: #1F5FAD; }
+.role-text-purple { color: #6A3D9A; }
+.role-text-gray   { color: #5F6368; }
+
+@media (max-width: 800px) {
+  .group-chat-layout { grid-template-columns: 1fr; }
+  .group-member-panel { max-height: none; }
+}
+
+/* ===== Animations (motion.js turns these on by adding .motion to <html>) =====
+   Without .motion (script blocked, or "reduce motion" turned on) nothing below hides or moves anything */
+:root { --ease-out: cubic-bezier(.2, .7, .2, 1); }
+
+/* Pages fade in when they open, and out when following a link */
+@keyframes page-in { from { opacity: 0; } to { opacity: 1; } }
+html.motion body { animation: page-in .28s ease-out backwards; }
+html.motion body.page-leaving { opacity: 0; transition: opacity .14s ease-in; }
+
+/* Cards slide up and fade in as they scroll into view. --reveal-delay lets a list come in one card at a time.
+   Uses "translate" (not "transform") so the hover lift below can still use transform */
+html.motion .reveal {
+  opacity: 0;
+  translate: 0 22px;
+  transition: opacity .6s var(--ease-out) var(--reveal-delay, 0s),
+              translate .6s var(--ease-out) var(--reveal-delay, 0s),
+              transform .2s ease, box-shadow .2s ease;
+}
+html.motion .reveal.visible { opacity: 1; translate: none; }
+
+/* Clickable cards lift a little on hover */
+/* :where() keeps this weaker than .reveal above, so cards that are also revealing keep their fade-in */
+html.motion :where(a.card, .event-card, .hokie-card) { transition: transform .2s ease, box-shadow .2s ease; }
+html.motion a.card:hover, html.motion .event-card:hover, html.motion .hokie-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(31, 26, 28, .08);
+}
+html.motion .btn { transition: transform .15s ease, background-color .15s ease, box-shadow .15s ease; }
+html.motion .btn:hover:not(:disabled) { transform: translateY(-1px); }
+html.motion .btn:active:not(:disabled) { transform: translateY(0); }
+
+/* Page titles come in word by word (--word-index is set on each word) */
+html.motion h1.split .word {
+  display: inline-block;
+  opacity: 0;
+  translate: 0 .5em;
+  rotate: 2deg;
+  transition: opacity .5s var(--ease-out), translate .5s var(--ease-out), rotate .5s var(--ease-out);
+  transition-delay: calc(var(--word-index) * 60ms);
+}
+html.motion h1.split.words-in .word { opacity: 1; translate: none; rotate: none; }
+
+/* Thin maroon-to-orange bar along the top showing how far down the page you are */
+.scroll-progress {
+  position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 1000;
+  background: linear-gradient(90deg, var(--maroon), var(--orange));
+  transform: scaleX(0); transform-origin: left center;
+  opacity: 0; transition: opacity .2s ease;
+  pointer-events: none;
+}
+.scroll-progress.active { opacity: 1; }
+
+/* Backup for "reduce motion": motion.js already skips everything, this also stops any leftover transitions */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .scroll-progress { display: none; }
+}
+
+/* ===== Photos in messages (chat-media.js) ===== */
+.attach-button { padding: 10px 12px; font-size: 18px; line-height: 1; flex-shrink: 0; }
+.message-form.drop-target { outline: 2px dashed var(--maroon); outline-offset: 4px; border-radius: 12px; }
+.composer-preview { display: flex; align-items: center; gap: 12px; padding: 10px 0 0; border-top: 1px solid var(--border); }
+.composer-preview[hidden] { display: none; }
+.composer-preview + .message-form { border-top: none; }
+.composer-photo { position: relative; flex-shrink: 0; }
+.composer-photo img { display: block; height: 72px; max-width: 140px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); }
+.composer-remove { position: absolute; top: -8px; right: -8px; width: 24px; height: 24px; border-radius: 50%; border: none; background: var(--text); color: white; font-size: 16px; line-height: 1; cursor: pointer; }
+.composer-hint { font-size: 13px; }
+
+/* The space is the photo's shape before it loads; a soft shimmer shows while it downloads */
+.chat-photo { display: block; max-width: 100%; padding: 0; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; cursor: zoom-in; background: #F1ECE8; margin-bottom: 4px; }
+.chat-photo img { display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .3s ease; }
+.chat-photo img.loaded { opacity: 1; }
+.chat-photo.photo-missing { cursor: default; }
+.chat-photo.photo-missing::after { content: 'Photo unavailable'; display: block; padding: 12px; color: var(--gray); font-size: 13px; }
+.chat-photo.photo-missing img { display: none; }
+html.motion .chat-photo:not(:has(img.loaded)):not(.photo-missing) {
+  background: linear-gradient(100deg, #F1ECE8 30%, #FBF8F6 50%, #F1ECE8 70%) 0 0 / 200% 100%;
+  animation: photo-shimmer 1.2s linear infinite;
+}
+@keyframes photo-shimmer { to { background-position: -200% 0; } }
+
+/* Full size photo viewer */
+.photo-viewer { padding: 0; border: none; background: transparent; max-width: 92vw; max-height: 92vh; overflow: visible; }
+.photo-viewer::backdrop { background: rgba(20, 14, 16, .82); }
+.photo-viewer img { display: block; max-width: 92vw; max-height: 88vh; border-radius: 12px; }
+.photo-viewer-close { position: absolute; top: -14px; right: -14px; width: 34px; height: 34px; border-radius: 50%; border: none; background: white; font-size: 20px; cursor: pointer; }
+html.motion .photo-viewer[open] { animation: viewer-in .22s var(--ease-out); }
+html.motion .photo-viewer[open]::backdrop { animation: page-in .22s ease-out; }
+@keyframes viewer-in { from { opacity: 0; transform: scale(.94); } }
+
+/* ===== Sending and receiving animations ===== */
+/* A message still sending is slightly faded until the server has it */
+.message.pending .bubble, .message.pending .chat-photo { opacity: .72; }
+.message.failed .bubble { background: #FDECEA; color: var(--text); border: 1px solid #D93025; }
+.message.failed .message-time { color: #B3261E; }
+
+/* Sent: pops up from the send button side with a small overshoot */
+html.motion .message-sending { animation: message-send .38s cubic-bezier(.2, .9, .3, 1.25) both; transform-origin: bottom right; }
+@keyframes message-send {
+  from { opacity: 0; transform: translateY(18px) scale(.9); }
+  to   { opacity: 1; transform: none; }
+}
+/* Arrived while you were reading: slides in from its side */
+html.motion .message-new.theirs { animation: message-arrive .4s var(--ease-out) both; transform-origin: bottom left; }
+html.motion .message-new.mine { animation: message-send .38s cubic-bezier(.2, .9, .3, 1.25) both; transform-origin: bottom right; }
+@keyframes message-arrive {
+  from { opacity: 0; transform: translateX(-14px) translateY(6px) scale(.96); }
+  to   { opacity: 1; transform: none; }
+}
+/* Not sent: a short shake */
+html.motion .message.failed .bubble, html.motion .message.failed .chat-photo { animation: message-shake .4s ease; }
+@keyframes message-shake {
+  20% { transform: translateX(-6px); } 40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); } 80% { transform: translateX(2px); }
+}
+/* "Seen" fades in */
+html.motion .seen-label { animation: page-in .5s ease-out; }
+/* The send button gives a little bounce */
+html.motion .send-pop { animation: send-pop .32s cubic-bezier(.2, .9, .3, 1.4); }
+@keyframes send-pop { 0% { transform: scale(1); } 35% { transform: scale(.9); } 100% { transform: scale(1); } }
+/* The photo preview pops in when a photo is picked */
+html.motion .composer-photo { animation: message-send .3s cubic-bezier(.2, .9, .3, 1.25); transform-origin: bottom left; }

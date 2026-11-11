@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HokieConnect – Your profile</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=DM+Sans:wght@400;700&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <script src="motion.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="home.html" class="logo">HokieConnect</a>
+    <div class="nav-links">
+      <a href="home.html">Discover</a>
+      <a href="events.html">Events</a>
+      <a href="hokies.html">Hokies</a>
+      <a href="groups.html">Groups</a>
+      <a href="messages.html">Messages</a>
+      <a href="profile.html" class="active">Profile</a>
+    </div>
+  </nav>
+
+  <div class="page profile-page">
+    <h1>Your profile</h1>
+    <p class="gray" id="welcomeText">Edit your profile and choose who can see each part of it.</p>
+
+    <form id="profileForm">
+
+      <!-- About you: always visible to other Hokies -->
+      <div class="card profile-section">
+        <div class="section-header">
+          <h2>About you</h2>
+          <span class="gray">Visible to all Hokies</span>
+        </div>
+
+        <label for="username">Username</label>
+        <input id="username" class="input" type="text" disabled>
+
+        <label for="displayName">Display name</label>
+        <input id="displayName" class="input" type="text" maxlength="100" placeholder="Hokie Bird">
+
+        <label for="gradYear">Class year</label>
+        <input id="gradYear" class="input" type="number" min="1872" placeholder="2026">
+
+        <label for="bio">Bio</label>
+        <textarea id="bio" class="input" rows="3" maxlength="500" placeholder="Just moved to D.C. for work, looking for running buddies!"></textarea>
+      </div>
+
+      <!-- Neighborhood -->
+      <div class="card profile-section">
+        <div class="section-header">
+          <h2>Neighborhood</h2>
+          <select id="neighborhoodVisibility" class="visibility-select" aria-label="Who can see your neighborhood"></select>
+        </div>
+
+        <p>Your neighborhood: <b id="currentNeighborhood">Not set</b></p>
+        <p class="gray">Used to find Hokies near you. Your exact location is never stored or shown, only your neighborhood and an approximate distance.</p>
+
+        <div class="location-actions">
+          <button type="button" id="useLocationButton" class="btn btn-maroon">Use my current location</button>
+          <button type="button" id="removeLocationButton" class="btn" hidden>Remove location</button>
+        </div>
+        <p id="locationStatus"></p>
+
+        <label for="neighborhoodSelect">If you would rather not share your location, pick the closest neighborhood:</label>
+        <select id="neighborhoodSelect" class="input">
+          <option value="">Choose a neighborhood</option>
+        </select>
+      </div>
+
+      <!-- Interests: pick any number -->
+      <div class="card profile-section">
+        <div class="section-header">
+          <h2>Interests</h2>
+          <select id="interestsVisibility" class="visibility-select" aria-label="Who can see your interests"></select>
+        </div>
+        <p class="gray">Pick as many as you like.</p>
+        <div id="interestChoices" class="filters"></div>
+      </div>
+
+      <!-- Wellness preferences: pick any number -->
+      <div class="card profile-section">
+        <div class="section-header">
+          <h2>Wellness preferences</h2>
+          <select id="wellnessVisibility" class="visibility-select" aria-label="Who can see your wellness preferences"></select>
+        </div>
+        <p class="gray">What would you like to focus on? Pick as many as you like.</p>
+        <div id="wellnessChoices" class="filters"></div>
+      </div>
+
+      <!-- Social links: all optional -->
+      <div class="card profile-section">
+        <div class="section-header">
+          <h2>Social links</h2>
+          <select id="socialVisibility" class="visibility-select" aria-label="Who can see your social links"></select>
+        </div>
+        <p class="gray">Help Hokies connect with you elsewhere. Type your username or paste a link to your profile, and leave the rest blank.</p>
+        <!-- One box per platform, added from /api/profile/options -->
+        <div id="socialInputs" class="social-inputs"></div>
+      </div>
+
+      <button type="submit" class="btn btn-maroon">Save profile</button>
+      <p id="profileStatus"></p>
+    </form>
+
+    <button id="logoutButton" class="btn">Log out</button>
+  </div>
+
+  <script>
+    const token = sessionStorage.getItem('authToken');
+    if (!token) {
+      window.location.href = 'index.html';
+    }
+
+    const profileForm = document.getElementById('profileForm');
+    const profileStatus = document.getElementById('profileStatus');
+    const visibilityLabels = { hokies: 'Visible to all Hokies', only_me: 'Only me' };
+
+    // Sends the login token with every request, goes back to sign in if the session is no longer valid
+    const apiRequest = async (url, options = {}) => {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.status === 401) {
+        sessionStorage.removeItem('authToken');
+        window.location.href = 'index.html';
+      }
+      return response;
+    };
+
+    // Creates a chip button, same style as the filters on the home page
+    // Clicking a chip selects it, clicking again deselects it
+    const makeChip = (container, value) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'filter';
+      chip.textContent = value;
+      chip.dataset.value = value;
+      chip.addEventListener('click', () => chip.classList.toggle('active'));
+      container.appendChild(chip);
+    };
+
+    const selectedChips = (containerId) =>
+      [...document.getElementById(containerId).querySelectorAll('.filter.active')].map((chip) => chip.dataset.value);
+
+    // ===== Location (saved right away, separate from the Save profile button) =====
+    const locationStatus = document.getElementById('locationStatus');
+
+    const showNeighborhood = (neighborhood) => {
+      document.getElementById('currentNeighborhood').textContent = neighborhood || 'Not set';
+      document.getElementById('removeLocationButton').hidden = !neighborhood;
+    };
+
+    const setLocationStatus = (message, color) => {
+      locationStatus.textContent = message;
+      locationStatus.style.color = color || '';
+    };
+
+    const saveLocation = async (location) => {
+      try {
+        const response = await apiRequest('/api/profile/location', {
+          method: 'PUT',
+          body: JSON.stringify(location)
+        });
+        const data = await response.json();
+        if (response.ok) {
+          showNeighborhood(data.neighborhood);
+          setLocationStatus('Location saved!', 'green');
+        } else {
+          setLocationStatus(data.message || 'Could not save location.', 'red');
+        }
+      } catch (error) {
+        setLocationStatus('Could not reach the server. Is server.js running?', 'red');
+      }
+    };
+
+    document.getElementById('useLocationButton').addEventListener('click', () => {
+      if (!navigator.geolocation) {
+        setLocationStatus('Your browser does not support location. Pick a neighborhood below instead.', 'red');
+        return;
+      }
+      setLocationStatus('Finding your location ...');
+      navigator.geolocation.getCurrentPosition(
+        (position) => saveLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        }),
+        (error) => {
+          const message = error.code === error.PERMISSION_DENIED
+            ? 'Location access was blocked. Allow it in your browser settings, or pick a neighborhood below.'
+            : 'Could not find your location. Try again, or pick a neighborhood below.';
+          setLocationStatus(message, 'red');
+        },
+        { enableHighAccuracy: false, timeout: 10000 }
+      );
+    });
+
+    document.getElementById('neighborhoodSelect').addEventListener('change', (event) => {
+      if (event.target.value) saveLocation({ neighborhood: event.target.value });
+    });
+
+    document.getElementById('removeLocationButton').addEventListener('click', async () => {
+      try {
+        const response = await apiRequest('/api/profile/location', { method: 'DELETE' });
+        if (response.ok) {
+          showNeighborhood('');
+          document.getElementById('neighborhoodSelect').value = '';
+          setLocationStatus('Location removed.');
+        }
+      } catch (error) {
+        setLocationStatus('Could not reach the server. Is server.js running?', 'red');
+      }
+    });
+
+    const loadProfile = async () => {
+      try {
+        const [optionsResponse, profileResponse] = await Promise.all([
+          fetch('/api/profile/options'),
+          apiRequest('/api/profile')
+        ]);
+        if (!optionsResponse.ok || !profileResponse.ok) throw new Error('Load failed');
+        const options = await optionsResponse.json();
+        const profile = await profileResponse.json();
+
+        // Build the choices
+        for (const interest of options.interests) makeChip(document.getElementById('interestChoices'), interest);
+        for (const preference of options.wellnessPreferences) makeChip(document.getElementById('wellnessChoices'), preference);
+        for (const place of options.neighborhoods) {
+          const option = document.createElement('option');
+          option.value = place;
+          option.textContent = place;
+          document.getElementById('neighborhoodSelect').appendChild(option);
+        }
+        for (const platform of options.socialPlatforms) {
+          const label = document.createElement('label');
+          label.htmlFor = `social-${platform.id}`;
+          label.textContent = platform.label;
+          const input = document.createElement('input');
+          input.id = `social-${platform.id}`;
+          input.className = 'input';
+          input.type = 'text';
+          input.maxLength = 200;
+          input.placeholder = platform.placeholder;
+          input.dataset.platform = platform.id;
+          input.value = profile.socialLinks[platform.id] || '';
+          document.getElementById('socialInputs').append(label, input);
+        }
+        for (const section of ['neighborhood', 'interests', 'wellness', 'social']) {
+          const select = document.getElementById(`${section}Visibility`);
+          for (const value of options.visibility) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = visibilityLabels[value] || value;
+            select.appendChild(option);
+          }
+          select.value = profile.visibility[section];
+        }
+
+        // Fill in the saved profile
+        document.getElementById('username').value = profile.username;
+        document.getElementById('displayName').value = profile.displayName;
+        document.getElementById('gradYear').value = profile.gradYear || '';
+        document.getElementById('bio').value = profile.bio;
+        showNeighborhood(profile.hasLocation ? profile.neighborhood : '');
+        for (const chip of document.querySelectorAll('#interestChoices .filter')) {
+          if (profile.interests.includes(chip.dataset.value)) chip.classList.add('active');
+        }
+        for (const chip of document.querySelectorAll('#wellnessChoices .filter')) {
+          if (profile.wellnessPreferences.includes(chip.dataset.value)) chip.classList.add('active');
+        }
+
+        // New accounts are sent here from the signup page
+        if (new URLSearchParams(window.location.search).has('welcome')) {
+          document.getElementById('welcomeText').textContent =
+            'Welcome to HokieConnect! Tell other Hokies a bit about yourself.';
+        }
+      } catch (error) {
+        profileStatus.textContent = 'Could not load your profile. Is server.js running?';
+        profileStatus.style.color = 'red';
+      }
+    };
+
+    profileForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      profileStatus.textContent = 'Saving ...';
+      profileStatus.style.color = '';
+
+      const gradYear = document.getElementById('gradYear').value;
+      const profile = {
+        displayName: document.getElementById('displayName').value.trim(),
+        gradYear: gradYear ? Number(gradYear) : null,
+        bio: document.getElementById('bio').value.trim(),
+        interests: selectedChips('interestChoices'),
+        wellnessPreferences: selectedChips('wellnessChoices'),
+        // { linkedin: '...', discord: '...' }, blank boxes remove that link
+        socialLinks: Object.fromEntries([...document.querySelectorAll('#socialInputs input')]
+          .map((input) => [input.dataset.platform, input.value.trim()])),
+        visibility: {
+          neighborhood: document.getElementById('neighborhoodVisibility').value,
+          interests: document.getElementById('interestsVisibility').value,
+          wellness: document.getElementById('wellnessVisibility').value,
+          social: document.getElementById('socialVisibility').value
+        }
+      };
+
+      try {
+        const response = await apiRequest('/api/profile', {
+          method: 'PUT',
+          body: JSON.stringify(profile)
+        });
+        const data = await response.json();
+        profileStatus.textContent = response.ok ? 'Profile saved!' : (data.message || 'Could not save profile.');
+        profileStatus.style.color = response.ok ? 'green' : 'red';
+      } catch (error) {
+        profileStatus.textContent = 'Could not reach the server. Is server.js running?';
+        profileStatus.style.color = 'red';
+      }
+    });
+
+    document.getElementById('logoutButton').addEventListener('click', async () => {
+      try {
+        await apiRequest('/api/logout', { method: 'POST' });
+      } finally {
+        sessionStorage.removeItem('authToken');
+        window.location.href = 'index.html';
+      }
+    });
+
+    loadProfile();
+  </script>
+
+</body>
+</html>
