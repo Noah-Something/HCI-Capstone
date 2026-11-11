@@ -274,3 +274,79 @@ textarea.input { font-family: inherit; resize: vertical; }
 .group-event:last-child { border-bottom: none; }
 .role-badge { background: var(--maroon-light); color: var(--maroon); font-size: 12px; font-weight: bold; padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
 .attendee .attendee-message + .attendee-message { margin-left: 4px; }
+
+/* Group chat and member list (group.html) */
+.event-detail.group-detail { max-width: none; } /* Same width as the chat and roles cards below it */
+.group-chat-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-top: 16px; align-items: start; }
+.group-chat-layout[hidden] { display: none; }
+.group-chat-layout > .card { min-width: 0; }
+.group-chat-panel { display: flex; flex-direction: column; min-height: 420px; }
+.group-chat-area { display: flex; flex-direction: column; flex: 1; }
+.group-chat-area[hidden] { display: none; }
+.group-chat-list { min-height: 300px; max-height: 60vh; }
+.group-chat-list .message { gap: 0; }
+.group-chat-list .message:not(.run-start) { margin-top: -6px; }
+.chat-sender { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 14px; margin: 0 0 4px 4px; }
+.chat-sender .role-badge { margin-left: 2px; font-size: 11px; padding: 1px 6px; }
+.link-button { background: none; border: none; padding: 0; color: var(--gray); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
+.link-button:hover { color: var(--maroon); }
+
+.group-member-panel { max-height: 80vh; overflow-y: auto; }
+.member-total { font-size: 16px; font-weight: normal; }
+.member-section-title { font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: .04em; color: var(--gray); margin: 14px 0 4px; }
+.group-member-list { list-style: none; margin: 0; padding: 0; }
+.group-member { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.group-member:last-child { border-bottom: none; }
+.group-member-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.group-member-name { overflow-wrap: anywhere; }
+.group-member-sub { font-size: 13px; }
+.role-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.role-badges:empty { display: none; }
+.role-badges .role-badge { margin-left: 0; }
+
+/* The ⋯ menu next to each member */
+.member-menu { position: relative; flex-shrink: 0; }
+.member-menu summary { list-style: none; cursor: pointer; padding: 2px 10px; border-radius: 8px; border: 1.5px solid #D9D1CC; font-weight: bold; background: white; user-select: none; }
+.member-menu summary::-webkit-details-marker { display: none; }
+.member-menu[open] summary { background: var(--maroon-light); border-color: var(--maroon); }
+.member-menu-body { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; width: 220px; background: white; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 6px; }
+.member-menu-item { display: block; width: 100%; text-align: left; background: none; border: none; border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 14px; color: var(--text); cursor: pointer; }
+.member-menu-item:hover { background: var(--bg); }
+.member-menu-label { font-size: 12px; font-weight: bold; text-transform: uppercase; color: var(--gray); padding: 8px 10px 2px; border-top: 1px solid var(--border); margin-top: 4px; }
+.member-menu-check { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+.member-menu-check:hover { background: var(--bg); }
+.member-menu-note { font-size: 13px; padding: 6px 10px; margin: 0; }
+
+/* Custom roles card */
+.group-roles-card { margin-top: 16px; }
+.role-list { list-style: none; margin: 0 0 12px; padding: 0; }
+.role-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.role-row .role-badge { margin-left: 0; font-size: 13px; }
+.role-count { font-size: 13px; flex: 1; min-width: 70px; }
+.role-row .input, .role-form .input { margin: 0; width: auto; padding: 6px 10px; }
+.role-form { display: flex; flex-wrap: wrap; gap: 8px; }
+.role-form #roleName { flex: 1; min-width: 160px; }
+
+/* Role colors, used by badges (role-color-*) and by names in the member list and chat (role-text-*) */
+.role-color-maroon { --role: #861F41; }
+.role-color-orange { --role: #C2581A; }
+.role-color-gold   { --role: #8A6A00; }
+.role-color-green  { --role: #2E7D32; }
+.role-color-teal   { --role: #00796B; }
+.role-color-blue   { --role: #1F5FAD; }
+.role-color-purple { --role: #6A3D9A; }
+.role-color-gray   { --role: #5F6368; }
+.role-badge[class*="role-color-"] { color: var(--role); background: color-mix(in srgb, var(--role) 12%, white); }
+.role-text-maroon { color: #861F41; }
+.role-text-orange { color: #C2581A; }
+.role-text-gold   { color: #8A6A00; }
+.role-text-green  { color: #2E7D32; }
+.role-text-teal   { color: #00796B; }
+.role-text-blue   { color: #1F5FAD; }
+.role-text-purple { color: #6A3D9A; }
+.role-text-gray   { color: #5F6368; }
+
+@media (max-width: 800px) {
+  .group-chat-layout { grid-template-columns: 1fr; }
+  .group-member-panel { max-height: none; }
+}

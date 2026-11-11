@@ -12,6 +12,7 @@
 const { Pool } = require('pg');
 
 // The first admin is the group's creator. Only admins can host events for a group (like in server.js).
+// roles are custom roles (holders must be in the group), chat is [sender, message, minutes ago]
 // Together they cover big and small groups, groups with one or two admins, a group with only its creator,
 // and categories that line up with the sample events and profile interests
 const SAMPLE_GROUPS = [
@@ -19,19 +20,50 @@ const SAMPLE_GROUPS = [
         name: 'DC Hokie Runners', category: 'Running',
         description: 'Weekly runs around the Mall and Rock Creek for every pace. New runners always welcome!',
         admins: ['sample_maya', 'sample_olivia'],
-        members: ['sample_jordan', 'sample_ethan', 'sample_tyler', 'sample_priya']
+        members: ['sample_jordan', 'sample_ethan', 'sample_tyler', 'sample_priya'],
+        roles: [
+            { name: 'Run Leader', color: 'orange', holders: ['sample_maya', 'sample_ethan'] },
+            { name: 'Pace Setter', color: 'teal', holders: ['sample_jordan'] }
+        ],
+        chat: [
+            ['sample_maya', 'Saturday 5K is posted! Meet at the Washington Monument at 8.', 2900],
+            ['sample_ethan', 'I can lead the 10 min/mile group again.', 2880],
+            ['sample_priya', 'First time joining, is it okay if I run/walk?', 1500],
+            ['sample_olivia', 'Totally! We always have a run/walk group and nobody gets left behind.', 1490],
+            ['sample_jordan', 'Rock Creek trail run is on for next week too, bring trail shoes if you have them.', 300],
+            ['sample_maya', 'Forecast looks great for Saturday. See everyone there!', 45]
+        ]
     },
     {
         name: 'Hokie Game Day Crew', category: 'Game Days',
         description: 'We find the best spots to watch every Hokies game in D.C. and Northern Virginia. Go Hokies!',
         admins: ['sample_sam'],
-        members: ['sample_marcus', 'sample_jordan', 'sample_chris', 'sample_hannah', 'sample_maya']
+        members: ['sample_marcus', 'sample_jordan', 'sample_chris', 'sample_hannah', 'sample_maya'],
+        roles: [
+            { name: 'Tailgate Chef', color: 'orange', holders: ['sample_marcus'] },
+            { name: 'Ticket Wrangler', color: 'blue', holders: ['sample_hannah'] }
+        ],
+        chat: [
+            ['sample_sam', 'Watch party is booked, we have the back room reserved.', 4300],
+            ['sample_marcus', 'I will bring the Hokie Bird cupcakes again.', 4200],
+            ['sample_chris', 'Is there parking nearby or should we take the Metro?', 1200],
+            ['sample_sam', 'Metro is easiest, it is two blocks from the station.', 1180],
+            ['sample_hannah', 'Anyone going to the away game? I can get group tickets.', 90]
+        ]
     },
     {
         name: 'Mindful Hokies', category: 'Yoga',
         description: 'Yoga, mindful eating and phone-free time for Hokies looking to slow down.',
         admins: ['sample_priya'],
-        members: ['sample_olivia', 'sample_hannah', 'sample_maya']
+        members: ['sample_olivia', 'sample_hannah', 'sample_maya'],
+        roles: [
+            { name: 'Yoga Instructor', color: 'purple', holders: ['sample_priya'] }
+        ],
+        chat: [
+            ['sample_priya', 'Sunrise yoga is back on the calendar. Mats provided if you need one.', 3000],
+            ['sample_olivia', 'Could we try a phone-free hour after one of the sessions?', 700],
+            ['sample_hannah', 'Yes please, I need that.', 680]
+        ]
     },
     {
         name: 'NoVA Board Gamers', category: 'Board Games',
@@ -43,7 +75,15 @@ const SAMPLE_GROUPS = [
         name: 'Capital Crescent Cyclists', category: 'Cycling',
         description: 'Group rides on the Capital Crescent, Custis and Mount Vernon trails. No-drop, helmets required.',
         admins: ['sample_jordan'],
-        members: ['sample_tyler', 'sample_ethan', 'sample_sam']
+        members: ['sample_tyler', 'sample_ethan', 'sample_sam'],
+        roles: [
+            { name: 'Ride Captain', color: 'green', holders: ['sample_jordan'] },
+            { name: 'Bike Mechanic', color: 'gray', holders: ['sample_tyler'] }
+        ],
+        chat: [
+            ['sample_jordan', 'Group ride this weekend, about 25 miles at a chatty pace.', 2000],
+            ['sample_tyler', 'I will bring a pump and spare tubes in case anyone flats.', 1950]
+        ]
     },
     {
         name: 'Hokies on the Trail', category: 'Hiking',
@@ -87,6 +127,47 @@ const findSampleUsers = async (client) => {
         throw error;
     }
     return ids;
+};
+
+// Custom roles are matched by name so their ids stay the same. Only the sample users' role holders and
+// chat messages are reset, anything a real member did in the group is kept
+const seedRolesAndChat = async (client, groupId, group, userIds, sampleUserIds) => {
+    const samplePlaceholders = sampleUserIds.map((_, index) => `$${index + 2}`).join(', ');
+    for (const role of group.roles || []) {
+        const existing = await client.query(
+            'SELECT id FROM group_roles WHERE group_id = $1 AND LOWER(name) = LOWER($2)',
+            [groupId, role.name]
+        );
+        let roleId;
+        if (existing.rows.length) {
+            roleId = existing.rows[0].id;
+            await client.query('UPDATE group_roles SET name = $1, color = $2 WHERE id = $3', [role.name, role.color, roleId]);
+        } else {
+            const result = await client.query(
+                'INSERT INTO group_roles (group_id, name, color) VALUES ($1, $2, $3) RETURNING id',
+                [groupId, role.name, role.color]
+            );
+            roleId = result.rows[0].id;
+        }
+        await client.query(
+            `DELETE FROM group_member_roles WHERE role_id = $1 AND user_id IN (${samplePlaceholders})`,
+            [roleId, ...sampleUserIds]
+        );
+        for (const username of role.holders) {
+            await client.query('INSERT INTO group_member_roles (role_id, user_id) VALUES ($1, $2)', [roleId, userIds.get(username)]);
+        }
+    }
+
+    await client.query(
+        `DELETE FROM group_messages WHERE group_id = $1 AND sender_id IN (${samplePlaceholders})`,
+        [groupId, ...sampleUserIds]
+    );
+    for (const [username, body, minutesAgo] of group.chat || []) {
+        await client.query(
+            'INSERT INTO group_messages (group_id, sender_id, body, created_at) VALUES ($1, $2, $3, $4)',
+            [groupId, userIds.get(username), body, new Date(Date.now() - minutesAgo * 60 * 1000)]
+        );
+    }
 };
 
 const seedSampleGroups = async () => {
@@ -143,6 +224,7 @@ const seedSampleGroups = async () => {
                     );
                 }
             }
+            await seedRolesAndChat(client, groupId, group, userIds, sampleUserIds);
             const size = group.admins.length + group.members.length;
             console.log(`  ${group.name.padEnd(27)} ${group.category.padEnd(13)} ${size} ${size === 1 ? 'member' : 'members'}`);
         }
@@ -157,7 +239,7 @@ const seedSampleGroups = async () => {
 };
 
 // Only deletes groups with these names that a sample user created, never real groups.
-// Memberships are removed too (ON DELETE CASCADE). Events hosted for these groups are kept,
+// Memberships, custom roles and chat messages are removed too (ON DELETE CASCADE). Events hosted for these groups are kept,
 // they just become hosted by the person who made them (ON DELETE SET NULL)
 const removeSampleGroups = async () => {
     const names = SAMPLE_GROUPS.map((group) => group.name);

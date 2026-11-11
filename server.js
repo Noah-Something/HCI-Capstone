@@ -154,6 +154,35 @@ const initDatabase = async () => {
         );
         CREATE INDEX IF NOT EXISTS idx_event_tags_tag ON event_tags(tag);
 
+        -- Group chat: every member of the group can read and post
+        CREATE TABLE IF NOT EXISTS group_messages (
+            id SERIAL PRIMARY KEY,
+            group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+            sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            body TEXT NOT NULL CHECK (char_length(body) BETWEEN 1 AND 1000),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_group_messages_group ON group_messages(group_id, created_at);
+
+        -- Custom roles a group's creator and admins make up (like "Run Leader" or "Treasurer").
+        -- They are labels shown on the member list and in the chat, they do not change permissions
+        CREATE TABLE IF NOT EXISTS group_roles (
+            id SERIAL PRIMARY KEY,
+            group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+            name VARCHAR(30) NOT NULL,
+            color VARCHAR(20) NOT NULL DEFAULT 'maroon',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (group_id, name)
+        );
+
+        -- Link table: which members hold which custom roles (a member can hold several)
+        CREATE TABLE IF NOT EXISTS group_member_roles (
+            role_id INTEGER NOT NULL REFERENCES group_roles(id) ON DELETE CASCADE,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            PRIMARY KEY (role_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_group_member_roles_user ON group_member_roles(user_id);
+
         -- Speed up lookups like "all groups/events for this user"
         CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id, recipient_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(recipient_id, sender_id, created_at);
@@ -1568,7 +1597,8 @@ app.delete('/api/events/:id/rsvp', requireAuth, async (req, res) => {
 
 // ===== Groups =====
 // Anyone can create a group (they become its admin) or join one. Admins can host events on behalf of
-// the group (see findHostableGroups) and can make other members admins.
+// the group (see findHostableGroups). The creator and admins can make other members admins, hand out
+// custom roles and remove chat messages. Every member can use the group chat.
 
 const MIN_GROUP_NAME = 3;
 const MAX_GROUP_NAME = 100;
@@ -1577,7 +1607,7 @@ const MAX_GROUP_DESCRIPTION = 1000;
 // Every group comes back with its member count, how many upcoming events it is hosting,
 // and the logged in user's role in it (null if they are not a member). $1 is always the user's id
 const GROUP_SELECT = `
-    SELECT groups.id, groups.name, groups.description, groups.category, groups.created_at,
+    SELECT groups.id, groups.name, groups.description, groups.category, groups.created_at, groups.creator_id,
            COALESCE(member_counts.member_count, 0) AS member_count,
            COALESCE(event_counts.event_count, 0) AS upcoming_event_count,
            my_membership.role AS my_role
@@ -1603,6 +1633,30 @@ const formatGroup = (row) => ({
 
 // Group ids come from the address, returns null if it is not a whole number
 const parseGroupId = (value) => (Number.isInteger(Number(value)) && Number(value) > 0 ? Number(value) : null);
+
+// The user's place in a group: null if they are not a member, otherwise
+// {role, isAdmin, isCreator, canManage}. The creator and admins can manage the group
+// (change who is admin, make custom roles, remove chat messages)
+const findMembership = async (groupId, userId) => {
+    const result = await pool.query(
+        `SELECT group_members.role, groups.creator_id FROM group_members
+         JOIN groups ON groups.id = group_members.group_id
+         WHERE group_members.group_id = $1 AND group_members.user_id = $2`,
+        [groupId, userId]
+    );
+    if (result.rows.length === 0) return null;
+    const {role, creator_id: creatorId} = result.rows[0];
+    const isAdmin = role === 'admin';
+    const isCreator = creatorId === userId;
+    return {role, isAdmin, isCreator, canManage: isAdmin || isCreator};
+};
+
+// Custom role colors, the page turns each one into a badge color (see .role-color-* in styles.css)
+const GROUP_ROLE_COLORS = ['maroon', 'orange', 'gold', 'green', 'teal', 'blue', 'purple', 'gray'];
+const MAX_GROUP_ROLE_NAME = 30;
+const MAX_GROUP_ROLES = 20;
+// These would be confused with the built-in badges
+const RESERVED_ROLE_NAMES = ['admin', 'member', 'creator'];
 
 // List groups, biggest first
 // Optional filters: ?q=<search name and description> &category=<name> &mine=1 (only groups the user is in)
@@ -1720,13 +1774,46 @@ app.get('/api/groups/:id', requireAuth, async (req, res) => {
         const viewerLocation = await findViewerLocation(req.userId);
         const tagsByEvent = await findEventTags(eventResult.rows.map((row) => row.id));
 
+        // The group's custom roles, and who holds each one
+        const roleResult = await pool.query(
+            'SELECT id, name, color FROM group_roles WHERE group_id = $1 ORDER BY created_at ASC, id ASC',
+            [groupId]
+        );
+        const holderResult = await pool.query(
+            `SELECT group_member_roles.role_id, group_member_roles.user_id FROM group_member_roles
+             JOIN group_roles ON group_roles.id = group_member_roles.role_id
+             WHERE group_roles.group_id = $1`,
+            [groupId]
+        );
+        const roles = roleResult.rows.map((row) => ({id: row.id, name: row.name, color: row.color}));
+        const rolesByUser = new Map();
+        for (const role of roles) {
+            for (const holder of holderResult.rows.filter((row) => row.role_id === role.id)) {
+                if (!rolesByUser.has(holder.user_id)) rolesByUser.set(holder.user_id, []);
+                rolesByUser.get(holder.user_id).push(role);
+            }
+        }
+
+        const group = groupResult.rows[0];
+        const myMembership = memberResult.rows.find((row) => row.id === req.userId);
         return res.status(200).json({
-            group: formatGroup(groupResult.rows[0]),
+            group: {
+                ...formatGroup(group),
+                // The creator and admins can manage roles and the chat
+                canManage: Boolean(myMembership) && (myMembership.role === 'admin' || group.creator_id === req.userId)
+            },
+            roles: roles.map((role) => ({
+                ...role,
+                memberCount: holderResult.rows.filter((row) => row.role_id === role.id).length
+            })),
+            roleColors: GROUP_ROLE_COLORS,
             members: memberResult.rows.map((row) => ({
                 username: row.username,
                 displayName: row.display_name || row.username,
                 gradYear: row.grad_year || null,
                 role: row.role,
+                isCreator: row.id === group.creator_id,
+                customRoles: rolesByUser.get(row.id) || [],
                 isMe: row.id === req.userId
             })),
             events: eventResult.rows.map((row) =>
@@ -1787,6 +1874,13 @@ app.delete('/api/groups/:id/membership', requireAuth, async (req, res) => {
             'SELECT user_id, role FROM group_members WHERE group_id = $1 ORDER BY joined_at ASC',
             [groupId]
         );
+        // Their custom roles in this group go with them (their chat messages stay)
+        await client.query(
+            `DELETE FROM group_member_roles WHERE user_id = $1
+             AND role_id IN (SELECT id FROM group_roles WHERE group_id = $2)`,
+            [req.userId, groupId]
+        );
+
         let message = 'Left Group';
         if (remaining.rows.length === 0) {
             await client.query('DELETE FROM groups WHERE id = $1', [groupId]);
@@ -1809,11 +1903,11 @@ app.delete('/api/groups/:id/membership', requireAuth, async (req, res) => {
     }
 });
 
-// An admin changes a member's role. Body: {role: 'admin' | 'member'}
+// The creator or an admin changes a member's role. Body: {role: 'admin' | 'member'}
 // Admins can host events for the group, so this is how a group gets more than one organizer
 app.put('/api/groups/:id/members/:username', requireAuth, async (req, res) => {
     const groupId = parseGroupId(req.params.id);
-    const {role} = req.body;
+    const {role} = req.body || {};
     if (!groupId) {
         return res.status(404).json({message: 'Group Not Found'});
     }
@@ -1821,19 +1915,24 @@ app.put('/api/groups/:id/members/:username', requireAuth, async (req, res) => {
         return res.status(400).json({message: 'Role must be admin or member'});
     }
     try {
+        const membership = await findMembership(groupId, req.userId);
+        if (!membership || !membership.canManage) {
+            return res.status(403).json({message: 'Only the group\'s creator and admins can change roles'});
+        }
         const roles = await pool.query(
-            `SELECT users.id, users.username, group_members.role FROM group_members
+            `SELECT users.id, users.username, group_members.role, groups.creator_id FROM group_members
              JOIN users ON users.id = group_members.user_id
+             JOIN groups ON groups.id = group_members.group_id
              WHERE group_members.group_id = $1`,
             [groupId]
         );
-        const me = roles.rows.find((row) => row.id === req.userId);
-        if (!me || me.role !== 'admin') {
-            return res.status(403).json({message: 'Only group admins can change roles'});
-        }
         const target = roles.rows.find((row) => row.username === req.params.username);
         if (!target) {
             return res.status(404).json({message: 'That person is not in this group'});
+        }
+        // Only the creator can step down from admin themselves, other admins cannot demote them
+        if (role === 'member' && target.id === target.creator_id && target.id !== req.userId) {
+            return res.status(403).json({message: 'The group\'s creator can only be removed as admin by themselves'});
         }
         if (role === 'member' && target.role === 'admin' && roles.rows.filter((row) => row.role === 'admin').length === 1) {
             return res.status(400).json({message: 'A group needs at least one admin'});
@@ -1847,6 +1946,288 @@ app.put('/api/groups/:id/members/:username', requireAuth, async (req, res) => {
         return res.status(500).json({
             message: 'Internal Server Error'
         });
+    }
+});
+
+// ===== Group chat =====
+// Only members can read or post. The page checks for new messages every few seconds (like direct messages)
+const GROUP_CHAT_HISTORY_LIMIT = 200;
+
+// The newest messages, oldest first
+app.get('/api/groups/:id/messages', requireAuth, async (req, res) => {
+    const groupId = parseGroupId(req.params.id);
+    if (!groupId) {
+        return res.status(404).json({message: 'Group Not Found'});
+    }
+    try {
+        const membership = await findMembership(groupId, req.userId);
+        if (!membership) {
+            return res.status(403).json({message: 'Join this group to see its chat'});
+        }
+        // People who left the group keep their old messages, so the name comes from users/profiles
+        const result = await pool.query(
+            `SELECT group_messages.id, group_messages.sender_id, group_messages.body, group_messages.created_at,
+                    users.username, profiles.display_name
+             FROM group_messages
+             JOIN users ON users.id = group_messages.sender_id
+             LEFT JOIN profiles ON profiles.user_id = users.id
+             WHERE group_messages.group_id = $1
+             ORDER BY group_messages.created_at DESC, group_messages.id DESC
+             LIMIT $2`,
+            [groupId, GROUP_CHAT_HISTORY_LIMIT]
+        );
+        return res.status(200).json({
+            messages: result.rows.reverse().map((row) => ({
+                id: row.id,
+                body: row.body,
+                createdAt: row.created_at,
+                fromMe: row.sender_id === req.userId,
+                sender: {username: row.username, displayName: row.display_name || row.username},
+                // Anyone can remove their own message, the creator and admins can remove any
+                canDelete: row.sender_id === req.userId || membership.canManage
+            }))
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// Post to the group chat. Body: {body}
+app.post('/api/groups/:id/messages', requireAuth, async (req, res) => {
+    const groupId = parseGroupId(req.params.id);
+    const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
+    if (!groupId) {
+        return res.status(404).json({message: 'Group Not Found'});
+    }
+    if (!body) {
+        return res.status(400).json({message: 'Message cannot be empty'});
+    }
+    if (body.length > MAX_MESSAGE_LENGTH) {
+        return res.status(400).json({message: `Message must be ${MAX_MESSAGE_LENGTH} characters or fewer`});
+    }
+    try {
+        if (!await findMembership(groupId, req.userId)) {
+            return res.status(403).json({message: 'Join this group to post in its chat'});
+        }
+        const result = await pool.query(
+            'INSERT INTO group_messages (group_id, sender_id, body) VALUES ($1, $2, $3) RETURNING id',
+            [groupId, req.userId, body]
+        );
+        return res.status(201).json({message: 'Message Sent', id: result.rows[0].id});
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// Remove a chat message: your own, or anyone's if you are the creator or an admin
+app.delete('/api/groups/:id/messages/:messageId', requireAuth, async (req, res) => {
+    const groupId = parseGroupId(req.params.id);
+    const messageId = parseGroupId(req.params.messageId);
+    if (!groupId || !messageId) {
+        return res.status(404).json({message: 'Message Not Found'});
+    }
+    try {
+        const membership = await findMembership(groupId, req.userId);
+        if (!membership) {
+            return res.status(403).json({message: 'Join this group to use its chat'});
+        }
+        const found = await pool.query(
+            'SELECT sender_id FROM group_messages WHERE id = $1 AND group_id = $2',
+            [messageId, groupId]
+        );
+        if (found.rows.length === 0) {
+            return res.status(404).json({message: 'Message Not Found'});
+        }
+        if (found.rows[0].sender_id !== req.userId && !membership.canManage) {
+            return res.status(403).json({message: 'You can only remove your own messages'});
+        }
+        await pool.query('DELETE FROM group_messages WHERE id = $1', [messageId]);
+        return res.status(200).json({message: 'Message Removed'});
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// ===== Custom group roles =====
+// The creator and admins make up roles for their group and hand them out to members
+
+// Returns an error message if the role name/color is invalid, otherwise null
+const validateGroupRole = (name, color) => {
+    if (!name) return 'Role name is required';
+    if (name.length > MAX_GROUP_ROLE_NAME) return `Role name must be ${MAX_GROUP_ROLE_NAME} characters or fewer`;
+    if (RESERVED_ROLE_NAMES.includes(name.toLowerCase())) return `"${name}" is already a built-in role, pick another name`;
+    if (!GROUP_ROLE_COLORS.includes(color)) return 'Please pick one of the role colors';
+    return null;
+};
+
+// Shared start of every role route: checks the group id and that the user can manage the group.
+// Sends the error response and returns null if not
+const requireGroupManager = async (req, res) => {
+    const groupId = parseGroupId(req.params.id);
+    if (!groupId) {
+        res.status(404).json({message: 'Group Not Found'});
+        return null;
+    }
+    const membership = await findMembership(groupId, req.userId);
+    if (!membership || !membership.canManage) {
+        res.status(403).json({message: 'Only the group\'s creator and admins can manage roles'});
+        return null;
+    }
+    return groupId;
+};
+
+// Role names are unique in a group, ignoring capital letters
+const roleNameTaken = async (groupId, name, exceptRoleId = 0) => {
+    const result = await pool.query(
+        'SELECT 1 FROM group_roles WHERE group_id = $1 AND LOWER(name) = LOWER($2) AND id <> $3',
+        [groupId, name, exceptRoleId]
+    );
+    return result.rows.length > 0;
+};
+
+// Make a new role. Body: {name, color}
+app.post('/api/groups/:id/roles', requireAuth, async (req, res) => {
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim().replace(/\s+/g, ' ') : '';
+    const color = req.body?.color || 'maroon';
+    try {
+        const groupId = await requireGroupManager(req, res);
+        if (!groupId) return;
+        const validationError = validateGroupRole(name, color);
+        if (validationError) {
+            return res.status(400).json({message: validationError});
+        }
+        const count = await pool.query('SELECT COUNT(*)::int AS n FROM group_roles WHERE group_id = $1', [groupId]);
+        if (count.rows[0].n >= MAX_GROUP_ROLES) {
+            return res.status(400).json({message: `A group can have up to ${MAX_GROUP_ROLES} roles`});
+        }
+        if (await roleNameTaken(groupId, name)) {
+            return res.status(409).json({message: 'This group already has a role with that name'});
+        }
+        const result = await pool.query(
+            'INSERT INTO group_roles (group_id, name, color) VALUES ($1, $2, $3) RETURNING id',
+            [groupId, name, color]
+        );
+        return res.status(201).json({message: 'Role Created', id: result.rows[0].id});
+    } catch (error) {
+        // 23505: two people made the same role at the same moment
+        if (error.code === '23505') {
+            return res.status(409).json({message: 'This group already has a role with that name'});
+        }
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// Rename a role or change its color. Body: {name, color}
+app.put('/api/groups/:id/roles/:roleId', requireAuth, async (req, res) => {
+    const roleId = parseGroupId(req.params.roleId);
+    try {
+        const groupId = await requireGroupManager(req, res);
+        if (!groupId) return;
+        const existing = roleId && await pool.query(
+            'SELECT name, color FROM group_roles WHERE id = $1 AND group_id = $2', [roleId, groupId]
+        );
+        if (!existing || existing.rows.length === 0) {
+            return res.status(404).json({message: 'Role Not Found'});
+        }
+        // Either one can be left out to keep it as it is
+        const name = typeof req.body?.name === 'string' ? req.body.name.trim().replace(/\s+/g, ' ') : existing.rows[0].name;
+        const color = req.body?.color || existing.rows[0].color;
+        const validationError = validateGroupRole(name, color);
+        if (validationError) {
+            return res.status(400).json({message: validationError});
+        }
+        if (await roleNameTaken(groupId, name, roleId)) {
+            return res.status(409).json({message: 'This group already has a role with that name'});
+        }
+        await pool.query('UPDATE group_roles SET name = $1, color = $2 WHERE id = $3', [name, color, roleId]);
+        return res.status(200).json({message: 'Role Updated'});
+    } catch (error) {
+        if (error.code === '23505') {
+            return res.status(409).json({message: 'This group already has a role with that name'});
+        }
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// Delete a role, everyone holding it loses it (ON DELETE CASCADE)
+app.delete('/api/groups/:id/roles/:roleId', requireAuth, async (req, res) => {
+    const roleId = parseGroupId(req.params.roleId);
+    try {
+        const groupId = await requireGroupManager(req, res);
+        if (!groupId) return;
+        const result = roleId
+            ? await pool.query('DELETE FROM group_roles WHERE id = $1 AND group_id = $2', [roleId, groupId])
+            : {rowCount: 0};
+        if (result.rowCount === 0) {
+            return res.status(404).json({message: 'Role Not Found'});
+        }
+        return res.status(200).json({message: 'Role Deleted'});
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    }
+});
+
+// Set which custom roles a member holds. Body: {roleIds: [1, 4]} (an empty list removes them all)
+app.put('/api/groups/:id/members/:username/roles', requireAuth, async (req, res) => {
+    const roleIds = req.body?.roleIds;
+    if (!Array.isArray(roleIds) || !roleIds.every((id) => Number.isInteger(id) && id > 0)) {
+        return res.status(400).json({message: 'roleIds must be a list of role ids'});
+    }
+    const wanted = [...new Set(roleIds)];
+    const client = await pool.connect();
+    try {
+        const groupId = await requireGroupManager(req, res);
+        if (!groupId) return;
+
+        const member = await client.query(
+            `SELECT users.id FROM group_members JOIN users ON users.id = group_members.user_id
+             WHERE group_members.group_id = $1 AND users.username = $2`,
+            [groupId, req.params.username]
+        );
+        if (member.rows.length === 0) {
+            return res.status(404).json({message: 'That person is not in this group'});
+        }
+        const userId = member.rows[0].id;
+
+        // Every role has to belong to this group
+        const groupRoles = await client.query('SELECT id FROM group_roles WHERE group_id = $1', [groupId]);
+        const groupRoleIds = groupRoles.rows.map((row) => row.id);
+        if (!wanted.every((id) => groupRoleIds.includes(id))) {
+            return res.status(400).json({message: 'One of those roles is not in this group'});
+        }
+
+        await client.query('BEGIN');
+        if (groupRoleIds.length) {
+            const placeholders = groupRoleIds.map((_, index) => `$${index + 2}`).join(', ');
+            await client.query(
+                `DELETE FROM group_member_roles WHERE user_id = $1 AND role_id IN (${placeholders})`,
+                [userId, ...groupRoleIds]
+            );
+        }
+        for (const roleId of wanted) {
+            await client.query('INSERT INTO group_member_roles (role_id, user_id) VALUES ($1, $2)', [roleId, userId]);
+        }
+        await client.query('COMMIT');
+        return res.status(200).json({message: 'Roles Updated'});
+    } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    } finally {
+        client.release();
     }
 });
 

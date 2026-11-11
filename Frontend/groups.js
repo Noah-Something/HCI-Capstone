@@ -46,6 +46,48 @@ async function setMemberRole(groupId, username, role) {
   return { ok: !result.offline && result.ok, message: result.offline ? 'Could not reach the server.' : result.data.message };
 }
 
+// Turns an apiRequest result into { ok, message, data }
+function groupResult(result) {
+  if (result.offline) return { ok: false, message: 'Could not reach the server.', data: {} };
+  return { ok: result.ok, message: result.data.message, data: result.data };
+}
+
+// ===== Group chat (members only) =====
+// Returns { ok, messages } or { ok: false, message }
+async function loadGroupChat(groupId) {
+  const result = groupResult(await apiRequest(`/api/groups/${groupId}/messages`));
+  return { ...result, messages: result.data.messages || [] };
+}
+
+async function sendGroupMessage(groupId, body) {
+  return groupResult(await apiRequest(`/api/groups/${groupId}/messages`, { method: 'POST', body: JSON.stringify({ body }) }));
+}
+
+async function deleteGroupMessage(groupId, messageId) {
+  return groupResult(await apiRequest(`/api/groups/${groupId}/messages/${messageId}`, { method: 'DELETE' }));
+}
+
+// ===== Custom roles (the creator and admins only) =====
+async function createGroupRole(groupId, name, color) {
+  return groupResult(await apiRequest(`/api/groups/${groupId}/roles`, { method: 'POST', body: JSON.stringify({ name, color }) }));
+}
+
+// changes: { name, color }, either can be left out
+async function updateGroupRole(groupId, roleId, changes) {
+  return groupResult(await apiRequest(`/api/groups/${groupId}/roles/${roleId}`, { method: 'PUT', body: JSON.stringify(changes) }));
+}
+
+async function deleteGroupRole(groupId, roleId) {
+  return groupResult(await apiRequest(`/api/groups/${groupId}/roles/${roleId}`, { method: 'DELETE' }));
+}
+
+// Replaces the custom roles a member holds with roleIds
+async function setMemberCustomRoles(groupId, username, roleIds) {
+  return groupResult(await apiRequest(`/api/groups/${groupId}/members/${encodeURIComponent(username)}/roles`, {
+    method: 'PUT', body: JSON.stringify({ roleIds })
+  }));
+}
+
 // The categories groups and events share (the profile interests list)
 async function loadGroupCategories() {
   try {
