@@ -124,7 +124,7 @@ const initDatabase = async () => {
             id SERIAL PRIMARY KEY,
             sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            body TEXT NOT NULL CHECK (char_length(body) BETWEEN 1 AND 1000),
+            body TEXT NOT NULL, -- Can be empty when a photo is attached, the server checks the length
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             read_at TIMESTAMPTZ,
             CHECK (sender_id <> recipient_id)
@@ -159,7 +159,7 @@ const initDatabase = async () => {
             id SERIAL PRIMARY KEY,
             group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
             sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            body TEXT NOT NULL CHECK (char_length(body) BETWEEN 1 AND 1000),
+            body TEXT NOT NULL, -- Can be empty when a photo is attached, the server checks the length
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         CREATE INDEX IF NOT EXISTS idx_group_messages_group ON group_messages(group_id, created_at);
@@ -183,6 +183,29 @@ const initDatabase = async () => {
         );
         CREATE INDEX IF NOT EXISTS idx_group_member_roles_user ON group_member_roles(user_id);
 
+        -- Messages can carry a photo, so the text can now be empty (the server still checks the length).
+        -- Databases made before this still have the old "1 to 1000 characters" rule, which Postgres
+        -- named <table>_body_check, so remove it there
+        ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_body_check;
+        ALTER TABLE group_messages DROP CONSTRAINT IF EXISTS group_messages_body_check;
+
+        -- One optional photo per message. Width and height let the page save the right amount of space
+        -- before the photo loads, so the chat does not jump around
+        CREATE TABLE IF NOT EXISTS message_images (
+            message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+            content_type VARCHAR(20) NOT NULL,
+            width INTEGER NOT NULL,
+            height INTEGER NOT NULL,
+            data BYTEA NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS group_message_images (
+            message_id INTEGER PRIMARY KEY REFERENCES group_messages(id) ON DELETE CASCADE,
+            content_type VARCHAR(20) NOT NULL,
+            width INTEGER NOT NULL,
+            height INTEGER NOT NULL,
+            data BYTEA NOT NULL
+        );
+
         -- Speed up lookups like "all groups/events for this user"
         CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id, recipient_id, created_at);
         CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(recipient_id, sender_id, created_at);
@@ -195,6 +218,9 @@ const initDatabase = async () => {
     `);
 };
 
+// Messages can carry a photo (sent as base64 text), so they get a bigger size limit than other requests.
+// Whichever parser runs first handles the body, the second one skips it
+app.use(['/api/messages', '/api/groups/:id/messages'], express.json({limit: '3mb'}));
 app.use(express.json());
 
 // Serve the website (Frontend/index.html is the sign in page at "/")
@@ -902,6 +928,46 @@ const MAX_MESSAGE_LENGTH = 1000;
 // Messages returned per conversation, the newest ones
 const MESSAGE_HISTORY_LIMIT = 200;
 
+// ===== Photos in messages (direct messages and group chat) =====
+// The page shrinks photos before sending (see chat-media.js), so 2 MB is plenty
+const MAX_MESSAGE_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_MESSAGE_IMAGE_SIDE = 4000;
+
+// Reads the optional photo on a sent message: {image: {data: 'data:image/jpeg;base64,...', width, height}}
+// Returns {photo: null} when there is none, {error} when it is not a usable image, otherwise {photo}
+const readMessagePhoto = (image) => {
+    if (image === undefined || image === null) return {photo: null};
+    const match = typeof image.data === 'string'
+        && image.data.match(/^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/);
+    if (!match) return {error: 'Photo must be a JPEG, PNG or WebP image'};
+    const data = Buffer.from(match[1], 'base64');
+    if (data.length > MAX_MESSAGE_IMAGE_BYTES) return {error: 'Photo must be 2 MB or smaller'};
+    // Check the file itself, not just what the request says it is (detectImageType is with the event images)
+    const contentType = detectImageType(data);
+    if (!contentType) return {error: 'Photo must be a JPEG, PNG or WebP image'};
+    const width = Number(image.width);
+    const height = Number(image.height);
+    const validSide = (side) => Number.isInteger(side) && side > 0 && side <= MAX_MESSAGE_IMAGE_SIDE;
+    if (!validSide(width) || !validSide(height)) return {error: 'Photo size is missing or too large'};
+    return {photo: {contentType, data, width, height}};
+};
+
+// Checks the text and photo of a message being sent. Returns {error} or {body, photo}
+const readMessageContent = (requestBody) => {
+    const body = typeof requestBody?.body === 'string' ? requestBody.body.trim() : '';
+    const {photo, error} = readMessagePhoto(requestBody?.image);
+    if (error) return {error};
+    if (!body && !photo) return {error: 'Message cannot be empty'};
+    if (body.length > MAX_MESSAGE_LENGTH) return {error: `Message must be ${MAX_MESSAGE_LENGTH} characters or fewer`};
+    return {body, photo};
+};
+
+// The photo part of a message for the page, or null. Photos are private, so the page loads them
+// with the login token instead of a plain <img src> (see chat-media.js)
+const formatMessagePhoto = (row, url) => (row.image_width
+    ? {url, width: row.image_width, height: row.image_height}
+    : null);
+
 // Look up the other person in a conversation by username, returns null if not found
 const findMessagePartner = async (username) => {
     const result = await pool.query(
@@ -919,7 +985,10 @@ const findMessagePartner = async (username) => {
 app.get('/api/conversations', requireAuth, async (req, res) => {
     try {
         const result = await pool.query(
-            `SELECT * FROM messages WHERE sender_id = $1 OR recipient_id = $1 ORDER BY created_at DESC, id DESC`,
+            `SELECT messages.*, message_images.message_id AS image_id FROM messages
+             LEFT JOIN message_images ON message_images.message_id = messages.id
+             WHERE messages.sender_id = $1 OR messages.recipient_id = $1
+             ORDER BY messages.created_at DESC, messages.id DESC`,
             [req.userId]
         );
 
@@ -931,6 +1000,7 @@ app.get('/api/conversations', requireAuth, async (req, res) => {
                 conversations.set(partnerId, {
                     partnerId,
                     lastMessage: message.body,
+                    lastMessageHasPhoto: message.image_id !== null,
                     lastMessageFromMe: message.sender_id === req.userId,
                     lastMessageAt: message.created_at,
                     unreadCount: 0
@@ -979,9 +1049,13 @@ app.get('/api/messages/:username', requireAuth, async (req, res) => {
         }
 
         const result = await pool.query(
-            `SELECT id, sender_id, body, created_at, read_at FROM messages
-             WHERE (sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1)
-             ORDER BY created_at DESC, id DESC
+            `SELECT messages.id, messages.sender_id, messages.body, messages.created_at, messages.read_at,
+                    message_images.width AS image_width, message_images.height AS image_height
+             FROM messages
+             LEFT JOIN message_images ON message_images.message_id = messages.id
+             WHERE (messages.sender_id = $1 AND messages.recipient_id = $2)
+                OR (messages.sender_id = $2 AND messages.recipient_id = $1)
+             ORDER BY messages.created_at DESC, messages.id DESC
              LIMIT $3`,
             [req.userId, partner.id, MESSAGE_HISTORY_LIMIT]
         );
@@ -996,6 +1070,7 @@ app.get('/api/messages/:username', requireAuth, async (req, res) => {
                 id: row.id,
                 fromMe: row.sender_id === req.userId,
                 body: row.body,
+                image: formatMessagePhoto(row, `/api/message-images/${row.id}`),
                 createdAt: row.created_at,
                 read: row.read_at !== null
             }))
@@ -1007,31 +1082,76 @@ app.get('/api/messages/:username', requireAuth, async (req, res) => {
     }
 });
 
-// Send a message to another user
+// Send a message to another user. Body: {body, image} (either one can be left out, not both)
 app.post('/api/messages/:username', requireAuth, async (req, res) => {
-    const body = typeof req.body.body === 'string' ? req.body.body.trim() : '';
-    if (!body) {
-        return res.status(400).json({message: 'Message cannot be empty'});
-    }
-    if (body.length > MAX_MESSAGE_LENGTH) {
-        return res.status(400).json({message: `Message must be ${MAX_MESSAGE_LENGTH} characters or fewer`});
+    const {body, photo, error} = readMessageContent(req.body);
+    if (error) {
+        return res.status(400).json({message: error});
     }
 
+    const client = await pool.connect();
     try {
         const partner = await findMessagePartner(req.params.username);
         if (!partner || partner.id === req.userId) {
             return res.status(404).json({message: 'User Not Found'});
         }
 
-        const result = await pool.query(
+        // The message and its photo are saved together
+        await client.query('BEGIN');
+        const result = await client.query(
             `INSERT INTO messages (sender_id, recipient_id, body) VALUES ($1, $2, $3)
              RETURNING id, body, created_at`,
             [req.userId, partner.id, body]
         );
         const message = result.rows[0];
+        if (photo) {
+            await client.query(
+                'INSERT INTO message_images (message_id, content_type, width, height, data) VALUES ($1, $2, $3, $4, $5)',
+                [message.id, photo.contentType, photo.width, photo.height, photo.data]
+            );
+        }
+        await client.query('COMMIT');
         return res.status(201).json({
-            message: { id: message.id, fromMe: true, body: message.body, createdAt: message.created_at, read: false }
+            message: {
+                id: message.id, fromMe: true, body: message.body, createdAt: message.created_at, read: false,
+                image: photo ? {url: `/api/message-images/${message.id}`, width: photo.width, height: photo.height} : null
+            }
         });
+    } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    } finally {
+        client.release();
+    }
+});
+
+// Sends a stored message photo. Photos are private, so they are only cached by this browser
+const sendMessagePhoto = (res, row) => {
+    res.set('Content-Type', row.content_type);
+    // A message's photo never changes, so the browser can keep it
+    res.set('Cache-Control', 'private, max-age=604800');
+    return res.status(200).send(row.data);
+};
+
+// A direct message's photo, only for the two people in the conversation
+app.get('/api/message-images/:id', requireAuth, async (req, res) => {
+    const messageId = Number(req.params.id);
+    if (!Number.isInteger(messageId) || messageId <= 0) {
+        return res.status(404).json({message: 'Photo Not Found'});
+    }
+    try {
+        const result = await pool.query(
+            `SELECT message_images.content_type, message_images.data FROM message_images
+             JOIN messages ON messages.id = message_images.message_id
+             WHERE message_images.message_id = $1 AND (messages.sender_id = $2 OR messages.recipient_id = $2)`,
+            [messageId, req.userId]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({message: 'Photo Not Found'});
+        }
+        return sendMessagePhoto(res, result.rows[0]);
     } catch (error) {
         return res.status(500).json({
             message: 'Internal Server Error'
@@ -1967,10 +2087,12 @@ app.get('/api/groups/:id/messages', requireAuth, async (req, res) => {
         // People who left the group keep their old messages, so the name comes from users/profiles
         const result = await pool.query(
             `SELECT group_messages.id, group_messages.sender_id, group_messages.body, group_messages.created_at,
-                    users.username, profiles.display_name
+                    users.username, profiles.display_name,
+                    group_message_images.width AS image_width, group_message_images.height AS image_height
              FROM group_messages
              JOIN users ON users.id = group_messages.sender_id
              LEFT JOIN profiles ON profiles.user_id = users.id
+             LEFT JOIN group_message_images ON group_message_images.message_id = group_messages.id
              WHERE group_messages.group_id = $1
              ORDER BY group_messages.created_at DESC, group_messages.id DESC
              LIMIT $2`,
@@ -1980,6 +2102,7 @@ app.get('/api/groups/:id/messages', requireAuth, async (req, res) => {
             messages: result.rows.reverse().map((row) => ({
                 id: row.id,
                 body: row.body,
+                image: formatMessagePhoto(row, `/api/groups/${groupId}/messages/${row.id}/image`),
                 createdAt: row.created_at,
                 fromMe: row.sender_id === req.userId,
                 sender: {username: row.username, displayName: row.display_name || row.username},
@@ -1994,28 +2117,67 @@ app.get('/api/groups/:id/messages', requireAuth, async (req, res) => {
     }
 });
 
-// Post to the group chat. Body: {body}
+// Post to the group chat. Body: {body, image} (either one can be left out, not both)
 app.post('/api/groups/:id/messages', requireAuth, async (req, res) => {
     const groupId = parseGroupId(req.params.id);
-    const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
     if (!groupId) {
         return res.status(404).json({message: 'Group Not Found'});
     }
-    if (!body) {
-        return res.status(400).json({message: 'Message cannot be empty'});
+    const {body, photo, error} = readMessageContent(req.body);
+    if (error) {
+        return res.status(400).json({message: error});
     }
-    if (body.length > MAX_MESSAGE_LENGTH) {
-        return res.status(400).json({message: `Message must be ${MAX_MESSAGE_LENGTH} characters or fewer`});
-    }
+    const client = await pool.connect();
     try {
         if (!await findMembership(groupId, req.userId)) {
             return res.status(403).json({message: 'Join this group to post in its chat'});
         }
-        const result = await pool.query(
+        // The message and its photo are saved together
+        await client.query('BEGIN');
+        const result = await client.query(
             'INSERT INTO group_messages (group_id, sender_id, body) VALUES ($1, $2, $3) RETURNING id',
             [groupId, req.userId, body]
         );
-        return res.status(201).json({message: 'Message Sent', id: result.rows[0].id});
+        const messageId = result.rows[0].id;
+        if (photo) {
+            await client.query(
+                'INSERT INTO group_message_images (message_id, content_type, width, height, data) VALUES ($1, $2, $3, $4, $5)',
+                [messageId, photo.contentType, photo.width, photo.height, photo.data]
+            );
+        }
+        await client.query('COMMIT');
+        return res.status(201).json({message: 'Message Sent', id: messageId});
+    } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        return res.status(500).json({
+            message: 'Internal Server Error'
+        });
+    } finally {
+        client.release();
+    }
+});
+
+// A group chat photo, only for the group's members
+app.get('/api/groups/:id/messages/:messageId/image', requireAuth, async (req, res) => {
+    const groupId = parseGroupId(req.params.id);
+    const messageId = parseGroupId(req.params.messageId);
+    if (!groupId || !messageId) {
+        return res.status(404).json({message: 'Photo Not Found'});
+    }
+    try {
+        if (!await findMembership(groupId, req.userId)) {
+            return res.status(403).json({message: 'Join this group to see its chat'});
+        }
+        const result = await pool.query(
+            `SELECT group_message_images.content_type, group_message_images.data FROM group_message_images
+             JOIN group_messages ON group_messages.id = group_message_images.message_id
+             WHERE group_message_images.message_id = $1 AND group_messages.group_id = $2`,
+            [messageId, groupId]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({message: 'Photo Not Found'});
+        }
+        return sendMessagePhoto(res, result.rows[0]);
     } catch (error) {
         return res.status(500).json({
             message: 'Internal Server Error'
@@ -2229,6 +2391,14 @@ app.put('/api/groups/:id/members/:username/roles', requireAuth, async (req, res)
     } finally {
         client.release();
     }
+});
+
+// A message with a photo over the size limit comes back as JSON like everything else
+app.use(['/api/messages', '/api/groups/:id/messages'], (error, req, res, next) => {
+    if (error.type === 'entity.too.large') {
+        return res.status(413).json({message: 'Photo must be 2 MB or smaller'});
+    }
+    next(error);
 });
 
 // Render assigns the port through PORT, default to 3000 locally

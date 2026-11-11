@@ -59,8 +59,11 @@ async function loadGroupChat(groupId) {
   return { ...result, messages: result.data.messages || [] };
 }
 
-async function sendGroupMessage(groupId, body) {
-  return groupResult(await apiRequest(`/api/groups/${groupId}/messages`, { method: 'POST', body: JSON.stringify({ body }) }));
+// photo is optional: { data, width, height } from ChatMedia (chat-media.js)
+async function sendGroupMessage(groupId, body, photo = null) {
+  return groupResult(await apiRequest(`/api/groups/${groupId}/messages`, {
+    method: 'POST', body: JSON.stringify({ body, image: photo })
+  }));
 }
 
 async function deleteGroupMessage(groupId, messageId) {

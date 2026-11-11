@@ -21,6 +21,9 @@ let membersByUsername = new Map();
 // Which member's ⋯ menu was open, so it stays open when the list is redrawn after a change
 let openMenuFor = null;
 let lastChatKey = '';
+// Chat message ids already shown, so only new ones animate in (see chat-media.js)
+const seenChatIds = new Set();
+const CHAT_KEY = `group-${groupId}`;
 
 function setStatus(element, message, color) {
   element.textContent = message;
@@ -206,9 +209,10 @@ function makeChatMessage(message, previous) {
     ? ` · <button type="button" class="link-button delete-chat-message" data-message-id="${message.id}">Remove</button>`
     : '';
   return `
-    <div class="message ${message.fromMe ? 'mine' : 'theirs'}${startsRun ? ' run-start' : ''}">
+    <div class="message ${message.fromMe ? 'mine' : 'theirs'}${startsRun ? ' run-start' : ''}" data-message-id="${message.id}">
       ${header}
-      <div class="bubble">${escapeEventHtml(message.body)}</div>
+      ${message.image ? ChatMedia.photoHtml(message.image) : ''}
+      ${message.body ? `<div class="bubble">${escapeEventHtml(message.body)}</div>` : ''}
       <span class="message-time">${formatChatTime(message.createdAt)}${remove}</span>
     </div>`;
 }
@@ -233,21 +237,45 @@ async function loadChat() {
   chatList.innerHTML = result.messages.length
     ? result.messages.map((message, index) => makeChatMessage(message, result.messages[index - 1])).join('')
     : `<p class="gray thread-start">No messages yet. Say hi to the group!</p>`;
+  // Messages still sending stay at the bottom, new arrivals slide in, photos load in the background
+  ChatMedia.keepPending(chatList, CHAT_KEY);
+  ChatMedia.animateNew(chatList, seenChatIds);
+  ChatMedia.loadPhotos(chatList);
   if (wasAtBottom || firstLoad) chatList.scrollTop = chatList.scrollHeight;
 }
 
-document.getElementById('chatForm').addEventListener('submit', async (submit) => {
-  submit.preventDefault();
-  const body = chatInput.value.trim();
-  if (!body) return;
-  const result = await sendGroupMessage(groupId, body);
+// The photo button, preview, paste and drag-and-drop (chat-media.js)
+const chatComposer = ChatMedia.setUpComposer({
+  form: document.getElementById('chatForm'),
+  textarea: chatInput,
+  onError: (message) => setStatus(document.getElementById('chatStatus'), message, 'red')
+});
+
+// The message shows straight away and animates in while it sends; if sending fails it can be tried again
+async function sendChatMessage(body, photo) {
+  const pendingMessage = ChatMedia.addPending(chatList, { body, photo, chatKey: CHAT_KEY });
+  const result = await sendGroupMessage(groupId, body, photo);
   if (!result.ok) {
-    setStatus(document.getElementById('chatStatus'), result.message || 'Could not send your message.', 'red');
+    ChatMedia.markFailed(pendingMessage, result.message || 'Not sent', () => sendChatMessage(body, photo));
     return;
   }
-  chatInput.value = '';
+  // Already animated in, so the redraw should not animate it again
+  seenChatIds.add(String(result.data.id));
+  ChatMedia.markSent(pendingMessage);
   await loadChat();
   chatList.scrollTop = chatList.scrollHeight;
+}
+
+document.getElementById('chatForm').addEventListener('submit', (submit) => {
+  submit.preventDefault();
+  const body = chatInput.value.trim();
+  const photo = chatComposer.getPhoto();
+  if (!body && !photo) return;
+  setStatus(document.getElementById('chatStatus'), '');
+  chatInput.value = '';
+  chatComposer.clear();
+  ChatMedia.popButton(submit.submitter || document.querySelector('#chatForm .btn-maroon'));
+  sendChatMessage(body, photo);
 });
 
 chatInput.addEventListener('keydown', (key) => {

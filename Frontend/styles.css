@@ -19,6 +19,9 @@ body {
 }
 
 h1, h2 { font-family: 'Bricolage Grotesque', Arial, sans-serif; margin: 0 0 8px; }
+/* Browsers give buttons and form fields their own system font, make them use the page's font instead
+   (this is what made the interest and wellness chips look different from the rest of the page) */
+button, input, select, textarea { font-family: inherit; }
 a { color: var(--maroon); text-decoration: none; }
 .gray { color: var(--gray); }
 
@@ -112,6 +115,7 @@ a { color: var(--maroon); text-decoration: none; }
   background: white;
   cursor: pointer;
   font-size: 14px;
+  color: var(--text);
 }
 .filter.active { background: var(--text); color: white; border-color: var(--text); }
 
@@ -408,3 +412,69 @@ html.motion h1.split.words-in .word { opacity: 1; translate: none; rotate: none;
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   .scroll-progress { display: none; }
 }
+
+/* ===== Photos in messages (chat-media.js) ===== */
+.attach-button { padding: 10px 12px; font-size: 18px; line-height: 1; flex-shrink: 0; }
+.message-form.drop-target { outline: 2px dashed var(--maroon); outline-offset: 4px; border-radius: 12px; }
+.composer-preview { display: flex; align-items: center; gap: 12px; padding: 10px 0 0; border-top: 1px solid var(--border); }
+.composer-preview[hidden] { display: none; }
+.composer-preview + .message-form { border-top: none; }
+.composer-photo { position: relative; flex-shrink: 0; }
+.composer-photo img { display: block; height: 72px; max-width: 140px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); }
+.composer-remove { position: absolute; top: -8px; right: -8px; width: 24px; height: 24px; border-radius: 50%; border: none; background: var(--text); color: white; font-size: 16px; line-height: 1; cursor: pointer; }
+.composer-hint { font-size: 13px; }
+
+/* The space is the photo's shape before it loads; a soft shimmer shows while it downloads */
+.chat-photo { display: block; max-width: 100%; padding: 0; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; cursor: zoom-in; background: #F1ECE8; margin-bottom: 4px; }
+.chat-photo img { display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .3s ease; }
+.chat-photo img.loaded { opacity: 1; }
+.chat-photo.photo-missing { cursor: default; }
+.chat-photo.photo-missing::after { content: 'Photo unavailable'; display: block; padding: 12px; color: var(--gray); font-size: 13px; }
+.chat-photo.photo-missing img { display: none; }
+html.motion .chat-photo:not(:has(img.loaded)):not(.photo-missing) {
+  background: linear-gradient(100deg, #F1ECE8 30%, #FBF8F6 50%, #F1ECE8 70%) 0 0 / 200% 100%;
+  animation: photo-shimmer 1.2s linear infinite;
+}
+@keyframes photo-shimmer { to { background-position: -200% 0; } }
+
+/* Full size photo viewer */
+.photo-viewer { padding: 0; border: none; background: transparent; max-width: 92vw; max-height: 92vh; overflow: visible; }
+.photo-viewer::backdrop { background: rgba(20, 14, 16, .82); }
+.photo-viewer img { display: block; max-width: 92vw; max-height: 88vh; border-radius: 12px; }
+.photo-viewer-close { position: absolute; top: -14px; right: -14px; width: 34px; height: 34px; border-radius: 50%; border: none; background: white; font-size: 20px; cursor: pointer; }
+html.motion .photo-viewer[open] { animation: viewer-in .22s var(--ease-out); }
+html.motion .photo-viewer[open]::backdrop { animation: page-in .22s ease-out; }
+@keyframes viewer-in { from { opacity: 0; transform: scale(.94); } }
+
+/* ===== Sending and receiving animations ===== */
+/* A message still sending is slightly faded until the server has it */
+.message.pending .bubble, .message.pending .chat-photo { opacity: .72; }
+.message.failed .bubble { background: #FDECEA; color: var(--text); border: 1px solid #D93025; }
+.message.failed .message-time { color: #B3261E; }
+
+/* Sent: pops up from the send button side with a small overshoot */
+html.motion .message-sending { animation: message-send .38s cubic-bezier(.2, .9, .3, 1.25) both; transform-origin: bottom right; }
+@keyframes message-send {
+  from { opacity: 0; transform: translateY(18px) scale(.9); }
+  to   { opacity: 1; transform: none; }
+}
+/* Arrived while you were reading: slides in from its side */
+html.motion .message-new.theirs { animation: message-arrive .4s var(--ease-out) both; transform-origin: bottom left; }
+html.motion .message-new.mine { animation: message-send .38s cubic-bezier(.2, .9, .3, 1.25) both; transform-origin: bottom right; }
+@keyframes message-arrive {
+  from { opacity: 0; transform: translateX(-14px) translateY(6px) scale(.96); }
+  to   { opacity: 1; transform: none; }
+}
+/* Not sent: a short shake */
+html.motion .message.failed .bubble, html.motion .message.failed .chat-photo { animation: message-shake .4s ease; }
+@keyframes message-shake {
+  20% { transform: translateX(-6px); } 40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); } 80% { transform: translateX(2px); }
+}
+/* "Seen" fades in */
+html.motion .seen-label { animation: page-in .5s ease-out; }
+/* The send button gives a little bounce */
+html.motion .send-pop { animation: send-pop .32s cubic-bezier(.2, .9, .3, 1.4); }
+@keyframes send-pop { 0% { transform: scale(1); } 35% { transform: scale(.9); } 100% { transform: scale(1); } }
+/* The photo preview pops in when a photo is picked */
+html.motion .composer-photo { animation: message-send .3s cubic-bezier(.2, .9, .3, 1.25); transform-origin: bottom left; }

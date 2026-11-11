@@ -62,6 +62,7 @@
     </div>
   </div>
 
+  <script src="chat-media.js"></script>
   <script>
     const token = sessionStorage.getItem('authToken');
     if (!token) {
@@ -77,6 +78,8 @@
     const messageStatus = document.getElementById('messageStatus');
     let openUsername = new URLSearchParams(window.location.search).get('user');
     let lastThreadKey = '';
+    // Message ids already shown in the open conversation, so only new ones animate in
+    let seenMessageIds = new Set();
 
     // Messages and names are typed by users, so escape them before putting them in the page
     const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => ({
@@ -129,7 +132,7 @@
             </div>
             <div class="conversation-bottom">
               <span class="conversation-preview${c.unreadCount ? ' unread' : ''}">
-                ${c.lastMessageFromMe ? 'You: ' : ''}${escapeHtml(c.lastMessage)}
+                ${c.lastMessageFromMe ? 'You: ' : ''}${c.lastMessageHasPhoto ? '📷 ' : ''}${escapeHtml(c.lastMessage || (c.lastMessageHasPhoto ? 'Photo' : ''))}
               </span>
               ${c.unreadCount ? `<span class="unread-badge">${c.unreadCount}</span>` : ''}
             </div>
@@ -175,11 +178,16 @@
           // "Seen" is only shown under my most recent message
           const lastMine = [...data.messages].reverse().find((m) => m.fromMe);
           messageList.innerHTML = data.messages.map((m) => `
-            <div class="message ${m.fromMe ? 'mine' : 'theirs'}">
-              <div class="bubble">${escapeHtml(m.body)}</div>
-              <span class="message-time">${formatTime(m.createdAt)}${m === lastMine && m.read ? ' · Seen' : ''}</span>
+            <div class="message ${m.fromMe ? 'mine' : 'theirs'}" data-message-id="${m.id}">
+              ${m.image ? ChatMedia.photoHtml(m.image) : ''}
+              ${m.body ? `<div class="bubble">${escapeHtml(m.body)}</div>` : ''}
+              <span class="message-time">${formatTime(m.createdAt)}${m === lastMine && m.read ? ' · <span class="seen-label">Seen</span>' : ''}</span>
             </div>`).join('');
         }
+        // Messages still sending stay at the bottom, new arrivals slide in, photos load in the background
+        ChatMedia.keepPending(messageList, openUsername);
+        ChatMedia.animateNew(messageList, seenMessageIds);
+        ChatMedia.loadPhotos(messageList);
         if (wasAtBottom || !messageList.dataset.loaded) {
           messageList.scrollTop = messageList.scrollHeight;
           messageList.dataset.loaded = 'true';
@@ -193,6 +201,7 @@
     const openConversation = (username) => {
       openUsername = username;
       lastThreadKey = '';
+      seenMessageIds = new Set();
       delete messageList.dataset.loaded;
       messageList.innerHTML = '';
       messageStatus.textContent = '';
@@ -215,32 +224,52 @@
     });
 
     // ===== Sending =====
-    document.getElementById('messageForm').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const body = messageInput.value.trim();
-      if (!body) return;
+    // The photo button, preview, paste and drag-and-drop (chat-media.js)
+    const composer = ChatMedia.setUpComposer({
+      form: document.getElementById('messageForm'),
+      textarea: messageInput,
+      onError: (message) => { messageStatus.textContent = message; messageStatus.style.color = 'red'; }
+    });
 
-      messageStatus.textContent = '';
+    // The message shows straight away and animates in while it sends; if sending fails it can be tried again
+    const sendMessage = async (username, body, photo) => {
+      const pendingMessage = ChatMedia.addPending(messageList, { body, photo, chatKey: username });
+      let reason = 'Not sent';
       try {
-        const response = await apiRequest(`/api/messages/${encodeURIComponent(openUsername)}`, {
+        const response = await apiRequest(`/api/messages/${encodeURIComponent(username)}`, {
           method: 'POST',
-          body: JSON.stringify({ body })
+          body: JSON.stringify({ body, image: photo })
         });
         const data = await response.json();
-        if (!response.ok) {
-          messageStatus.textContent = data.message || 'Could not send message.';
-          messageStatus.style.color = 'red';
+        if (response.ok) {
+          // Already animated in, so the redraw should not animate it again
+          seenMessageIds.add(String(data.message.id));
+          ChatMedia.markSent(pendingMessage);
+          if (username === openUsername) {
+            delete messageList.dataset.loaded; // always jump to the new message
+            await loadThread();
+          }
+          loadConversations();
           return;
         }
-        messageInput.value = '';
-        // Always jump to the new message
-        delete messageList.dataset.loaded;
-        await loadThread();
-        loadConversations();
+        reason = data.message || reason;
       } catch (error) {
-        messageStatus.textContent = 'Could not reach the server. Is server.js running?';
-        messageStatus.style.color = 'red';
+        reason = 'Could not reach the server';
       }
+      ChatMedia.markFailed(pendingMessage, reason, () => sendMessage(username, body, photo));
+    };
+
+    document.getElementById('messageForm').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const body = messageInput.value.trim();
+      const photo = composer.getPhoto();
+      if (!body && !photo) return;
+
+      messageStatus.textContent = '';
+      messageInput.value = '';
+      composer.clear();
+      ChatMedia.popButton(event.submitter || document.querySelector('#messageForm .btn-maroon'));
+      sendMessage(openUsername, body, photo);
     });
 
     messageInput.addEventListener('keydown', (event) => {
