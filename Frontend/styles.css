@@ -350,3 +350,61 @@ textarea.input { font-family: inherit; resize: vertical; }
   .group-chat-layout { grid-template-columns: 1fr; }
   .group-member-panel { max-height: none; }
 }
+
+/* ===== Animations (motion.js turns these on by adding .motion to <html>) =====
+   Without .motion (script blocked, or "reduce motion" turned on) nothing below hides or moves anything */
+:root { --ease-out: cubic-bezier(.2, .7, .2, 1); }
+
+/* Pages fade in when they open, and out when following a link */
+@keyframes page-in { from { opacity: 0; } to { opacity: 1; } }
+html.motion body { animation: page-in .28s ease-out backwards; }
+html.motion body.page-leaving { opacity: 0; transition: opacity .14s ease-in; }
+
+/* Cards slide up and fade in as they scroll into view. --reveal-delay lets a list come in one card at a time.
+   Uses "translate" (not "transform") so the hover lift below can still use transform */
+html.motion .reveal {
+  opacity: 0;
+  translate: 0 22px;
+  transition: opacity .6s var(--ease-out) var(--reveal-delay, 0s),
+              translate .6s var(--ease-out) var(--reveal-delay, 0s),
+              transform .2s ease, box-shadow .2s ease;
+}
+html.motion .reveal.visible { opacity: 1; translate: none; }
+
+/* Clickable cards lift a little on hover */
+/* :where() keeps this weaker than .reveal above, so cards that are also revealing keep their fade-in */
+html.motion :where(a.card, .event-card, .hokie-card) { transition: transform .2s ease, box-shadow .2s ease; }
+html.motion a.card:hover, html.motion .event-card:hover, html.motion .hokie-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(31, 26, 28, .08);
+}
+html.motion .btn { transition: transform .15s ease, background-color .15s ease, box-shadow .15s ease; }
+html.motion .btn:hover:not(:disabled) { transform: translateY(-1px); }
+html.motion .btn:active:not(:disabled) { transform: translateY(0); }
+
+/* Page titles come in word by word (--word-index is set on each word) */
+html.motion h1.split .word {
+  display: inline-block;
+  opacity: 0;
+  translate: 0 .5em;
+  rotate: 2deg;
+  transition: opacity .5s var(--ease-out), translate .5s var(--ease-out), rotate .5s var(--ease-out);
+  transition-delay: calc(var(--word-index) * 60ms);
+}
+html.motion h1.split.words-in .word { opacity: 1; translate: none; rotate: none; }
+
+/* Thin maroon-to-orange bar along the top showing how far down the page you are */
+.scroll-progress {
+  position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 1000;
+  background: linear-gradient(90deg, var(--maroon), var(--orange));
+  transform: scaleX(0); transform-origin: left center;
+  opacity: 0; transition: opacity .2s ease;
+  pointer-events: none;
+}
+.scroll-progress.active { opacity: 1; }
+
+/* Backup for "reduce motion": motion.js already skips everything, this also stops any leftover transitions */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .scroll-progress { display: none; }
+}
