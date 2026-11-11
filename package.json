@@ -2,6 +2,7 @@
   "scripts": {
     "start": "node server.js",
     "seed": "node scripts/seed-sample-profiles.js",
+    "seed-groups": "node scripts/seed-sample-groups.js",
     "seed-events": "node scripts/seed-sample-events.js"
   },
   "dependencies": {
